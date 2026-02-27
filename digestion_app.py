@@ -1384,6 +1384,7 @@ elif tool == "Feature Annotation Viewer":
 
         # Features
         seen_types = {}
+        occupied_tracks = []  # (start_bp, end_bp, track_index) for overlap avoidance
         for feat in record.features:
             if feat.type in ("source",):
                 continue
@@ -1402,24 +1403,70 @@ elif tool == "Feature Annotation Viewer":
             if a1 >= a0:
                 a1 -= 2 * np.pi
 
+            # For very short features, extend the arc to at least 3° so it's visible
+            min_arc = np.radians(3)
+            if abs(a1 - a0) < min_arc:
+                # Extend symmetrically around midpoint
+                mid_a_ext = (a0 + a1) / 2
+                a0 = mid_a_ext + min_arc / 2
+                a1 = mid_a_ext - min_arc / 2
+
             n_pts = max(40, int(abs(a1 - a0) / (2 * np.pi) * 500) + 2)
             arc = np.linspace(a0, a1, n_pts)
 
+            # Fixed ring width — arc length is already proportional to bp position
+            ring_w = 0.10
+
             # Two concentric rings: fwd (+) outer, rev (-) inner
+            # Use track assignment to avoid overlapping features
             if strand == -1:
-                r_outer, r_inner = 0.84, 0.74
+                base_r = 0.82
             else:
-                r_outer, r_inner = 1.00, 0.86
+                base_r = 1.00
+
+            # Find the first free track for this feature (greedy interval scheduling)
+            def overlaps(s1, e1, s2, e2):
+                # Handle wrap-around (circular)
+                if s1 <= e1 and s2 <= e2:
+                    return not (e1 < s2 or e2 < s1)
+                return True  # conservative: assume overlap if wrap-around
+
+            track = 0
+            while True:
+                blocked = any(
+                    overlaps(start, end, us, ue) and ut == track
+                    for us, ue, ut in occupied_tracks
+                )
+                if not blocked:
+                    break
+                track += 1
+
+            occupied_tracks.append((start, end, track))
+
+            track_offset = track * (ring_w + 0.02)
+            if strand == -1:
+                r_outer = base_r - track_offset
+                r_inner = r_outer - ring_w
+            else:
+                r_outer = base_r + track_offset
+                r_inner = r_outer - ring_w
 
             x_out = r_outer * np.cos(arc)
             y_out = r_outer * np.sin(arc)
             x_in  = r_inner * np.cos(arc[::-1])
             y_in  = r_inner * np.sin(arc[::-1])
 
-            # Arrow: triangle at the leading end of the arc
+            # Arrow head — width proportional to feature arc, capped at 15% of arc
+            arc_span = abs(a1 - a0)  # total arc in radians
+            # Arrow takes up at most 20% of the feature arc, min ~2°, max ~8°
+            arrow_span = min(arc_span * 0.20, np.radians(8))
+            arrow_span = max(arrow_span, np.radians(1.5))
+
             r_mid = (r_outer + r_inner) / 2
-            tip_a = a0 if strand != -1 else a1   # leading end
-            side_a = tip_a + (0.06 if strand != -1 else -0.06)
+            tip_a  = a0 if strand != -1 else a1    # leading end (clockwise = decreasing angle)
+            # For fwd strand tip is at a0 (start of arc), arrow points clockwise
+            # For rev strand tip is at a1 (end of arc), arrow points counter-clockwise
+            side_a = tip_a + (arrow_span if strand != -1 else -arrow_span)
             arrow_x = [r_outer * np.cos(tip_a),
                         r_mid   * np.cos(side_a),
                         r_inner * np.cos(tip_a),
@@ -1461,7 +1508,11 @@ elif tool == "Feature Annotation Viewer":
                 arc_fraction = abs(a1 - a0) / (2 * np.pi)
                 if arc_fraction > 0.025 or size_bp > plasmid_size * 0.025:
                     mid_a = (a0 + a1) / 2
-                    r_lbl = 1.14 if strand != -1 else 0.62
+                    # Place label just outside the feature's own track ring
+                    if strand != -1:
+                        r_lbl = r_outer + 0.13
+                    else:
+                        r_lbl = r_inner - 0.10
                     fig.add_annotation(
                         x=r_lbl * np.cos(mid_a),
                         y=r_lbl * np.sin(mid_a),
@@ -1502,9 +1553,9 @@ elif tool == "Feature Annotation Viewer":
             paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
             title=dict(text=f"Feature Map  |  {plasmid_name}",
                        font=dict(color="white", size=14, family="Arial Black"), x=0.5),
-            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[-1.65, 1.65]),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[-1.85, 1.85]),
             yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
-                       range=[-1.65, 1.65], scaleanchor="x"),
+                       range=[-1.85, 1.85], scaleanchor="x"),
             height=700, showlegend=True,
             legend=dict(
                 font=dict(color="white", size=10),
