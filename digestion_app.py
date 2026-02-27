@@ -188,24 +188,39 @@ def draw_gel(results, plasmid_size, title_suffix=""):
                            text=f"<b>{size} bp</b>" if is_thick else f"{size} bp",
                            showarrow=False,
                            font=dict(color="white" if is_thick else "#aaaaaa",
-                                     size=10 if is_thick else 9),
+                                     size=11 if is_thick else 10),
                            xanchor="right", yanchor="middle")
 
-    fig.add_annotation(x=0, y=y_max + 0.05, text="GeneRuler 1kb",
+    fig.add_annotation(x=0, y=y_max + 0.08, text="GeneRuler 1kb",
                        showarrow=False,
-                       font=dict(color="white", size=11, family="Arial Black"),
+                       font=dict(color="white", size=12, family="Arial Black"),
                        xanchor="center", yanchor="bottom")
 
     # ── Sample lanes ──
     for i, result in enumerate(results):
         lane_x = i + 1
         color = colors[i % len(colors)]
-        fig.add_annotation(x=lane_x, y=y_max + 0.05,
-                           text=result["enzymes"].replace(" + ", "<br>+ "),
-                           showarrow=False,
-                           font=dict(color=color, size=9),
-                           xanchor="center", yanchor="bottom",
-                           bgcolor="#2a2a4a", bordercolor=color, borderwidth=1)
+
+        # Rank number above lane
+        fig.add_annotation(
+            x=lane_x, y=y_max + 0.08,
+            text=f"<b>#{i+1}</b>",
+            showarrow=False,
+            font=dict(color=color, size=12, family="Arial Black"),
+            xanchor="center", yanchor="bottom")
+
+        # Enzyme label box — larger font, more padding
+        fig.add_annotation(
+            x=lane_x, y=y_max + 0.02,
+            text=result["enzymes"].replace(" + ", "<br>+ "),
+            showarrow=False,
+            font=dict(color=color, size=11, family="Arial"),
+            xanchor="center", yanchor="top",
+            bgcolor="#2a2a4a",
+            bordercolor=color,
+            borderwidth=1.5,
+            borderpad=5)
+
         max_frag = max(result["fragments"])
         for frag in result["fragments"]:
             y = bp_to_y(frag)
@@ -220,23 +235,29 @@ def draw_gel(results, plasmid_size, title_suffix=""):
                           fillcolor="white", opacity=intensity * 0.3, line=dict(width=0))
             fig.add_trace(go.Scatter(
                 x=[lane_x], y=[y], mode="markers",
-                marker=dict(size=18, color="white", opacity=0),
-                hovertemplate=f"<b>{result['enzymes']}</b><br>{frag} bp<extra></extra>",
+                marker=dict(size=20, color="white", opacity=0),
+                hovertemplate=(
+                    f"<b>#{i+1} — {result['enzymes']}</b><br>"
+                    f"Fragment: {frag} bp<br>"
+                    f"Total bands: {result['n']}"
+                    "<extra></extra>"),
                 showlegend=False))
 
     n_lanes = len(results) + 1
     fig.update_layout(
-        paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
+        paper_bgcolor="#1a1a2e",
+        plot_bgcolor="#1a1a2e",
         title=dict(
             text=f"Predicted Restriction Digest Pattern — {plasmid_size} bp plasmid{title_suffix}",
-            font=dict(color="white", size=14), x=0.5),
+            font=dict(color="white", size=15, family="Arial Black"),
+            x=0.5),
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
                    range=[-1.2, len(results) + 0.5]),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
-                   range=[y_min - 0.1, y_max + 0.3]),
-        height=600,
-        width=max(600, n_lanes * 75),
-        margin=dict(t=100, b=20, l=80, r=20),
+                   range=[y_min - 0.1, y_max + 0.35]),
+        height=650,
+        width=max(650, n_lanes * 85),
+        margin=dict(t=120, b=20, l=90, r=20),
         hovermode="closest")
     return fig
 
@@ -255,20 +276,21 @@ with st.sidebar:
 
     st.divider()
     st.subheader("🔧 Analysis Settings")
-    prefer_short = st.checkbox(
-        "Prioritise short fragments",
-        value=False,
-        help="Ranks results by smallest largest fragment — minimises gel run time")
+
     min_frag = st.slider("Minimum fragment size (bp)", 100, 3000, 250, 50)
     max_frag = st.slider("Maximum fragment size (bp)", 1000, 50000, 8000, 500)
     min_frags = st.slider("Minimum number of bands (n)", 1, 8, 3,
-                          help="Results will be shown for n and n+1 bands")
+                          help="Results will be displayed for n and n+1 bands simultaneously")
     max_frags = st.slider("Maximum number of bands", 2, 10, 6)
-    min_diff = st.slider("Minimum relative size difference between bands", 0.05, 0.5, 0.15, 0.05)
-    
+    min_diff = st.slider("Minimum relative size difference between adjacent bands",
+                         0.05, 0.5, 0.15, 0.05)
+    prefer_short = st.checkbox(
+        "Prioritise short fragments",
+        value=False,
+        help="Ranks results by smallest largest fragment — minimises total gel run time")
     combo_min = st.slider("Minimum enzymes per digest", 1, 3, 1)
     combo_max = st.slider("Maximum enzymes per digest", 1, 3, 2,
-                          help="Increasing to 3 significantly increases computation time")
+                          help="⚠️ Setting this to 3 significantly increases computation time")
     top_n = st.slider("Number of results to display", 1, 20, 10)
 
     st.divider()
@@ -287,7 +309,7 @@ if run:
     plasmid_seq, demo_modus = load_sequence(uploaded_file)
 
     if plasmid_seq is None:
-        st.error("❌ Unable to read the uploaded file. Please check the file format and try again.")
+        st.error("❌ Unable to read the uploaded file. Please verify the file format and try again.")
         st.stop()
 
     plasmid_size = len(plasmid_seq)
@@ -308,7 +330,8 @@ if run:
                 min_diff, (combo_min, combo_max), top_n,
                 prefer_short=prefer_short)
 
-        st.caption(f"Enzymes with at least one recognition site: {', '.join(e.__name__ for e in cutting)}")
+        st.caption(f"Enzymes with at least one recognition site in this plasmid: "
+                   f"{', '.join(e.__name__ for e in cutting)}")
 
         if not best:
             st.error("No suitable enzyme combinations found. Consider relaxing the analysis parameters.")
@@ -317,7 +340,8 @@ if run:
                 "Rank": i+1,
                 "Enzyme(s)": r["enzymes"],
                 "Fragment sizes (bp)": ",  ".join(str(f) for f in r["fragments"]),
-                "No. of bands": r["n"]
+                "No. of bands": r["n"],
+                "Largest fragment (bp)": max(r["fragments"])
             } for i, r in enumerate(best)])
             st.dataframe(df, use_container_width=True, hide_index=True)
 
@@ -334,13 +358,14 @@ else:
 
     **How it works**
 
-    The tool evaluates all possible single, double, and triple enzyme combinations from the selected enzyme set.
-    Combinations are ranked by how evenly the resulting fragments are distributed across the detectable size range,
-    ensuring clear band separation on an agarose gel.
+    The tool evaluates all possible single, double, and triple enzyme combinations
+    from the selected enzyme set. Combinations are ranked by how evenly the resulting
+    fragments are distributed across the detectable size range, ensuring clear band
+    separation on an agarose gel. Results are shown simultaneously for n and n+1
+    minimum bands for easy comparison.
 
     **Tips**
-    - Limit digests to a maximum of 2 enzymes for faster results
+    - Limit digests to a maximum of 2 enzymes per reaction for faster results
     - Use *Prioritise short fragments* if gel run time is a concern
-    - Results are shown for n and n+1 minimum bands simultaneously for easy comparison
+    - Enzymes not present in the uploaded sequence are automatically excluded
     """)
-
