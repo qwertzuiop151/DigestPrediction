@@ -11,13 +11,13 @@ import pandas as pd
 
 # ── PAGE SETTINGS ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Restriction Digest Tool",
+    page_title="Restriction Digest Planner",
     page_icon="🧬",
     layout="wide"
 )
 
-st.title("🧬 Restriction Digest Tool")
-st.markdown("Finds the best enzyme combinations for diagnostic restriction digests.")
+st.title("🧬 Restriction Digest Planner")
+st.markdown("Automatically identifies optimal enzyme combinations for diagnostic restriction analysis of circular plasmids.")
 
 # ── ENZYMES ────────────────────────────────────────────────────────────────────
 DEFAULT_ENZYMES = [
@@ -228,7 +228,7 @@ def draw_gel(results, plasmid_size, title_suffix=""):
     fig.update_layout(
         paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
         title=dict(
-            text=f"Restriction Digest Simulation — Plasmid {plasmid_size} bp{title_suffix}",
+            text=f"Predicted Restriction Digest Pattern — {plasmid_size} bp plasmid{title_suffix}",
             font=dict(color="white", size=14), x=0.5),
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
                    range=[-1.2, len(results) + 0.5]),
@@ -247,84 +247,99 @@ with st.sidebar:
     uploaded_file = st.file_uploader(
         "Upload plasmid sequence",
         type=["fasta", "fa", "fas", "gb", "gbk", "genbank", "sbd"],
-        help="Supported formats: FASTA, GenBank, SeqBuilder (.sbd)")
+        help="Accepted formats: FASTA, GenBank, SeqBuilder Pro (.sbd)")
 
-    st.caption("💡 Without a file the tool runs in demo mode with a random 10kb plasmid.")
+    st.caption("💡 No file required — without an upload the tool runs in demo mode using a randomly generated 10 kb plasmid.")
 
     run = st.button("▶  Run Analysis", type="primary", use_container_width=True)
 
     st.divider()
-    st.subheader("🔧 Settings")
+    st.subheader("🔧 Analysis Settings")
 
-    min_frag = st.slider("Min fragment size (bp)", 100, 3000, 250, 50)
-    max_frag = st.slider("Max fragment size (bp)", 1000, 50000, 8000, 500)
-    min_frags = st.slider("Min number of bands (n)", 1, 8, 3)
-    max_frags = st.slider("Max number of bands", 2, 10, 6)
-    min_diff = st.slider("Min size difference", 0.05, 0.5, 0.15, 0.05)
-    prefer_short = st.checkbox("Prefer short fragments (faster on gel)", value=False)
-    combo_min = st.slider("Min enzymes per digest", 1, 3, 1)
-    combo_max = st.slider("Max enzymes per digest", 1, 3, 2)
-    top_n = st.slider("Top N results", 1, 20, 10)
+    min_frag = st.slider("Minimum fragment size (bp)", 100, 3000, 250, 50)
+    max_frag = st.slider("Maximum fragment size (bp)", 1000, 50000, 8000, 500)
+    min_frags = st.slider("Minimum number of bands (n)", 1, 8, 3,
+                          help="Results will be shown for n and n+1 bands")
+    max_frags = st.slider("Maximum number of bands", 2, 10, 6)
+    min_diff = st.slider("Minimum relative size difference between bands", 0.05, 0.5, 0.15, 0.05)
+    prefer_short = st.checkbox(
+        "Prioritise short fragments",
+        value=False,
+        help="Ranks results by smallest largest fragment — minimises gel run time")
+    combo_min = st.slider("Minimum enzymes per digest", 1, 3, 1)
+    combo_max = st.slider("Maximum enzymes per digest", 1, 3, 2,
+                          help="Increasing to 3 significantly increases computation time")
+    top_n = st.slider("Number of results to display", 1, 20, 10)
 
     st.divider()
-    st.subheader("🧪 Select enzymes")
-    select_all = st.checkbox("Select all", value=True)
+    st.subheader("🧪 Enzyme Selection")
+    select_all = st.checkbox("Select all enzymes", value=True)
     if select_all:
         selected_enzymes = DEFAULT_ENZYMES
     else:
         selected_enzymes = st.multiselect(
-            "Enzymes:", DEFAULT_ENZYMES, default=DEFAULT_ENZYMES[:10])
+            "Select enzymes available in your laboratory:",
+            DEFAULT_ENZYMES,
+            default=DEFAULT_ENZYMES[:10])
 
 # ── MAIN AREA ──────────────────────────────────────────────────────────────────
 if run:
     plasmid_seq, demo_modus = load_sequence(uploaded_file)
 
     if plasmid_seq is None:
-        st.error("❌ Could not read file — please check the format!")
+        st.error("❌ Unable to read the uploaded file. Please check the file format and try again.")
         st.stop()
 
     plasmid_size = len(plasmid_seq)
 
     if demo_modus:
-        st.warning("⚠️ No file uploaded — running in demo mode with random 10kb plasmid")
+        st.warning("⚠️ No sequence file uploaded — running in demo mode with a randomly generated 10 kb plasmid.")
     else:
-        st.success(f"✅ Plasmid loaded: {plasmid_size} bp")
+        st.success(f"✅ Sequence loaded successfully: {plasmid_size} bp")
 
     for min_f in [min_frags, min_frags + 1]:
         st.divider()
-        st.subheader(f"Analysis — minimum {min_f} bands")
+        st.subheader(f"Results — minimum {min_f} bands")
 
-        with st.spinner(f"Searching combinations with min {min_f} bands..."):
+        with st.spinner(f"Searching for optimal enzyme combinations yielding at least {min_f} bands..."):
             best, cutting = find_best_digests(
                 plasmid_seq, selected_enzymes,
                 min_frag, max_frag, min_f, max_frags,
                 min_diff, (combo_min, combo_max), top_n,
                 prefer_short=prefer_short)
 
-        st.caption(f"Enzymes that cut: {', '.join(e.__name__ for e in cutting)}")
+        st.caption(f"Enzymes with at least one recognition site: {', '.join(e.__name__ for e in cutting)}")
 
         if not best:
-            st.error("No combinations found — try adjusting the parameters!")
+            st.error("No suitable enzyme combinations found. Consider relaxing the analysis parameters.")
         else:
             df = pd.DataFrame([{
-                "#": i+1,
-                "Enzymes": r["enzymes"],
-                "Fragments (bp)": ",  ".join(str(f) for f in r["fragments"]),
-                "Number of bands": r["n"]
+                "Rank": i+1,
+                "Enzyme(s)": r["enzymes"],
+                "Fragment sizes (bp)": ",  ".join(str(f) for f in r["fragments"]),
+                "No. of bands": r["n"]
             } for i, r in enumerate(best)])
             st.dataframe(df, use_container_width=True, hide_index=True)
 
-            fig = draw_gel(best, plasmid_size, title_suffix=f" (min {min_f} bands)")
+            fig = draw_gel(best, plasmid_size,
+                           title_suffix=f" — minimum {min_f} bands")
             st.plotly_chart(fig, use_container_width=True)
 else:
-    st.info("👈 Set parameters and click **Run Analysis**!")
+    st.info("👈 Configure parameters in the sidebar and click **Run Analysis** to begin.")
     st.markdown("""
-    **Supported file formats:**
-    - `.fasta` / `.fa` / `.fas`
-    - `.gb` / `.gbk` / `.genbank`
-    - `.sbd` (SeqBuilder Pro)
+    **Accepted file formats**
+    - FASTA (`.fasta`, `.fa`, `.fas`)
+    - GenBank (`.gb`, `.gbk`, `.genbank`)
+    - SeqBuilder Pro (`.sbd`)
 
-    **Without a file** the tool runs in demo mode with a random 10kb sequence.
+    **How it works**
 
-    **Tip:** Start with max 2 enzymes per digest for faster results.
+    The tool evaluates all possible single, double, and triple enzyme combinations from the selected enzyme set.
+    Combinations are ranked by how evenly the resulting fragments are distributed across the detectable size range,
+    ensuring clear band separation on an agarose gel.
+
+    **Tips**
+    - Limit digests to a maximum of 2 enzymes for faster results
+    - Use *Prioritise short fragments* if gel run time is a concern
+    - Results are shown for n and n+1 minimum bands simultaneously for easy comparison
     """)
