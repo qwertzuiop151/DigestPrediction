@@ -28,13 +28,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── TOOL SELECTION ─────────────────────────────────────────────────────────────
+# ── TOOL SELECTION ────────────────────────────────────────────────────────────
 tool = st.sidebar.radio(
     "🔬 Select Tool",
     ["Restriction Digest Planner", "Multi-Plasmid Comparator", "Cut Site Map"],
     index=0
 )
 
+tool_descriptions = {
+    "Restriction Digest Planner": "🧪 **Restriction Digest Planner** — Upload a plasmid sequence and automatically find the best enzyme combinations for a diagnostic digest. Ranked by band separation quality and visualised as a predicted agarose gel.",
+    "Multi-Plasmid Comparator": "🔀 **Multi-Plasmid Comparator** — Upload 2 or more plasmids and identify which enzyme combinations produce distinct, distinguishable band patterns. Ideal for colony screening and construct verification.",
+    "Cut Site Map": "🗺️ **Cut Site Map** — Generate a circular restriction map of your plasmid showing all enzyme recognition sites and their exact positions."
+}
+
+st.sidebar.caption(tool_descriptions[tool])
 st.sidebar.divider()
 
 # ── ENZYMES ────────────────────────────────────────────────────────────────────
@@ -791,3 +798,4 @@ elif tool == "Cut Site Map":
 
         **Tip:** Use enzyme selection to focus on enzymes relevant to your cloning strategy.
         """)
+
