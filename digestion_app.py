@@ -642,16 +642,21 @@ elif tool == "Multi-Plasmid Comparator":
             help="Upload at least 2 plasmids to compare",
             key="uploader_2")
 
-        st.caption("Optionally paste additional sequences below (one per box).")
-        pasted_seq_2a = st.text_area(
-            "Paste sequence A",
-            placeholder="Paste raw DNA or FASTA…",
-            height=68, key="paste_2a",
-            help="Name will be taken from FASTA header if present.")
-        pasted_seq_2b = st.text_area(
-            "Paste sequence B",
-            placeholder="Paste raw DNA or FASTA…",
-            height=68, key="paste_2b")
+        st.caption("Optionally paste additional sequences below.")
+        n_paste = st.number_input(
+            "Number of pasted sequences", min_value=0, max_value=8, value=2, step=1,
+            key="n_paste_2",
+            help="Add up to 8 additional sequences by pasting directly.")
+        pasted_seqs_2 = []
+        labels = "ABCDEFGH"
+        for _i in range(int(n_paste)):
+            _label = labels[_i]
+            _txt = st.text_area(
+                f"Paste sequence {_label}",
+                placeholder="Paste raw DNA or FASTA…",
+                height=68, key=f"paste_2_{_label}",
+                help="Name will be taken from FASTA header if present.")
+            pasted_seqs_2.append((_txt, f"Sequence {_label}"))
 
         run2 = st.button("▶  Run Comparison", type="primary", use_container_width=True, key="run_2")
 
