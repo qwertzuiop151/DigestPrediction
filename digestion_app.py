@@ -1527,8 +1527,14 @@ elif tool == "Feature Annotation Viewer":
                     else:
                         r_lbl = r_inner - 0.10
                     # Scale font size and label length with feature size
-                    lbl_size  = max(6, min(10, int(6 + arc_fraction * 40)))
-                    lbl_chars = max(6, min(20, int(arc_fraction * 120)))
+                    # Primers are always small regardless of arc
+                    is_primer_feat = display_type in ("primer_bind_fwd", "primer_bind_rev", "primer_bind")
+                    if is_primer_feat:
+                        lbl_size  = 6
+                        lbl_chars = 8
+                    else:
+                        lbl_size  = max(7, min(10, int(6 + arc_fraction * 40)))
+                        lbl_chars = max(8, min(20, int(arc_fraction * 120)))
                     fig.add_annotation(
                         x=r_lbl * np.cos(mid_a),
                         y=r_lbl * np.sin(mid_a),
