@@ -8,7 +8,6 @@ import re
 import random
 import io
 import pandas as pd
-import math
 
 # ── PAGE SETTINGS ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -28,17 +27,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── TOOL SELECTION ────────────────────────────────────────────────────────────
+# ── TOOL SELECTION ─────────────────────────────────────────────────────────────
 tool = st.sidebar.radio(
     "🔬 Select Tool",
-    ["Restriction Digest Planner", "Multi-Plasmid Comparator", "Cut Site Map"],
+    ["Restriction Digest Planner", "Multi-Plasmid Comparator"],
     index=0
 )
 
 tool_descriptions = {
     "Restriction Digest Planner": "🧪 **Restriction Digest Planner** — Upload a plasmid sequence and automatically find the best enzyme combinations for a diagnostic digest. Ranked by band separation quality and visualised as a predicted agarose gel.",
     "Multi-Plasmid Comparator": "🔀 **Multi-Plasmid Comparator** — Upload 2 or more plasmids and identify which enzyme combinations produce distinct, distinguishable band patterns. Ideal for colony screening and construct verification.",
-    "Cut Site Map": "🗺️ **Cut Site Map** — Generate a circular restriction map of your plasmid showing all enzyme recognition sites and their exact positions."
 }
 
 st.sidebar.caption(tool_descriptions[tool])
@@ -62,14 +60,10 @@ def read_sbd(raw):
         text = raw.decode("latin-1")
         matches = re.findall(r'[ATCGatcg]{100,}', text)
         if not matches:
-            return None, None
-        seq = max(matches, key=len).upper()
-        # Try to extract name
-        name_match = re.search(r'Written by SeqBuilder.*?([A-Za-z0-9_\-\.]+)\s*$',
-                                text[:500], re.MULTILINE)
-        return seq, None
+            return None
+        return max(matches, key=len).upper()
     except:
-        return None, None
+        return None
 
 def load_sequence(uploaded_file):
     if uploaded_file is None:
@@ -81,7 +75,7 @@ def load_sequence(uploaded_file):
     display_name = uploaded_file.name.rsplit(".", 1)[0]
 
     if name.endswith(".sbd"):
-        seq, _ = read_sbd(raw)
+        seq = read_sbd(raw)
         if seq:
             return seq, False, display_name
 
@@ -111,14 +105,10 @@ def load_sequence(uploaded_file):
     return None, False, display_name
 
 # ── ANALYSIS FUNCTIONS ─────────────────────────────────────────────────────────
-def get_cut_sites(plasmid_seq, enzymes):
-    rb = Restriction.RestrictionBatch(enzymes)
-    return rb.search(plasmid_seq, linear=False)
-
 def get_fragments(plasmid_seq, enzymes, plasmid_size):
-    search_results = get_cut_sites(plasmid_seq, enzymes)
+    rb = Restriction.RestrictionBatch(enzymes)
     cut_sites = []
-    for enz, sites in search_results.items():
+    for enz, sites in rb.search(plasmid_seq, linear=False).items():
         cut_sites.extend(sites)
     if not cut_sites:
         return []
@@ -206,7 +196,6 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
     colors = ["#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3",
               "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#ff6b6b", "#4ecdc4"]
 
-    # ── Marker ──
     max_marker = max(marker_sizes)
     for size in marker_sizes:
         y = bp_to_y(size)
@@ -233,7 +222,6 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
                        font=dict(color="white", size=12, family="Arial Black"),
                        xanchor="center", yanchor="bottom")
 
-    # ── Sample lanes ──
     for i, result in enumerate(results):
         lane_x = i + 1
         color = colors[i % len(colors)]
@@ -297,13 +285,14 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
         hovermode="closest")
     return fig
 
-# ── CUT SITE MAP ───────────────────────────────────────────────────────────────
-def draw_cut_site_map(plasmid_seq, plasmid_size, plasmid_name, selected_enzymes):
-    resolved = [getattr(Restriction, e) for e in selected_enzymes if hasattr(Restriction, e)]
+# ── PLASMID MAP ────────────────────────────────────────────────────────────────
+def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
+    resolved = [getattr(Restriction, e) for e in enzyme_list if hasattr(Restriction, e)]
+    if not resolved:
+        return None
     rb = Restriction.RestrictionBatch(resolved)
     search_results = rb.search(Seq(plasmid_seq), linear=False)
     cutting = {e.__name__: sites for e, sites in search_results.items() if sites}
-
     if not cutting:
         return None
 
@@ -311,87 +300,80 @@ def draw_cut_site_map(plasmid_seq, plasmid_size, plasmid_name, selected_enzymes)
     colors = ["#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3",
               "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#ff6b6b", "#4ecdc4"]
 
-    # Draw plasmid circle
+    # Plasmid circle
     theta = np.linspace(0, 2 * np.pi, 300)
     fig.add_trace(go.Scatter(
         x=np.cos(theta), y=np.sin(theta),
         mode="lines",
-        line=dict(color="#aaaaaa", width=8),
+        line=dict(color="#aaaaaa", width=10),
         hoverinfo="skip", showlegend=False))
 
-    # Draw cut sites
+    # Cut sites
     for idx, (enz_name, sites) in enumerate(cutting.items()):
         color = colors[idx % len(colors)]
         for site in sites:
             angle = 2 * np.pi * site / plasmid_size - np.pi / 2
-            inner = 0.85
-            outer = 1.15
-            x0 = inner * np.cos(angle)
-            y0 = inner * np.sin(angle)
-            x1 = outer * np.cos(angle)
-            y1 = outer * np.sin(angle)
-
+            x0, y0 = 0.82 * np.cos(angle), 0.82 * np.sin(angle)
+            x1, y1 = 1.18 * np.cos(angle), 1.18 * np.sin(angle)
             fig.add_trace(go.Scatter(
                 x=[x0, x1], y=[y0, y1],
                 mode="lines",
-                line=dict(color=color, width=2.5),
+                line=dict(color=color, width=3),
                 hoverinfo="skip", showlegend=False))
 
-            # Label
-            label_r = 1.28
+            label_r = 1.35
             fig.add_trace(go.Scatter(
                 x=[label_r * np.cos(angle)],
                 y=[label_r * np.sin(angle)],
-                mode="markers+text",
-                marker=dict(size=8, color=color),
-                text=[f"{enz_name}<br>{site} bp"],
-                textposition="middle center",
-                textfont=dict(color=color, size=9),
+                mode="markers",
+                marker=dict(size=10, color=color, opacity=0),
                 hovertemplate=f"<b>{enz_name}</b><br>Position: {site} bp<extra></extra>",
                 showlegend=True,
                 name=f"{enz_name} ({len(sites)}x)"))
 
-    # Plasmid name in center
-    fig.add_annotation(
-        x=0, y=0.1,
-        text=f"<b>{plasmid_name}</b>",
-        showarrow=False,
-        font=dict(color="white", size=14, family="Arial Black"),
-        xanchor="center")
-    fig.add_annotation(
-        x=0, y=-0.1,
-        text=f"{plasmid_size} bp",
-        showarrow=False,
-        font=dict(color="#aaaaaa", size=12),
-        xanchor="center")
+            # Enzyme name label
+            label_r2 = 1.5
+            fig.add_annotation(
+                x=label_r2 * np.cos(angle),
+                y=label_r2 * np.sin(angle),
+                text=f"<b>{enz_name}</b><br><span style='font-size:9px'>{site} bp</span>",
+                showarrow=False,
+                font=dict(color=color, size=10),
+                xanchor="center", yanchor="middle")
+
+    # Center labels
+    fig.add_annotation(x=0, y=0.12, text=f"<b>{plasmid_name}</b>",
+                       showarrow=False,
+                       font=dict(color="white", size=13, family="Arial Black"),
+                       xanchor="center")
+    fig.add_annotation(x=0, y=-0.12, text=f"{plasmid_size} bp",
+                       showarrow=False,
+                       font=dict(color="#aaaaaa", size=11),
+                       xanchor="center")
 
     fig.update_layout(
         paper_bgcolor="#1a1a2e",
         plot_bgcolor="#1a1a2e",
         title=dict(
             text=f"Restriction Site Map — {plasmid_name}",
-            font=dict(color="white", size=15, family="Arial Black"),
+            font=dict(color="white", size=14, family="Arial Black"),
             x=0.5),
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
-                   range=[-1.7, 1.7]),
+                   range=[-2.1, 2.1]),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
-                   range=[-1.7, 1.7], scaleanchor="x"),
-        height=650,
-        width=700,
+                   range=[-2.1, 2.1], scaleanchor="x"),
+        height=550, width=550,
         showlegend=True,
-        legend=dict(
-            font=dict(color="white", size=10),
-            bgcolor="#2a2a4a",
-            bordercolor="#aaaaaa",
-            borderwidth=1),
-        margin=dict(t=80, b=20, l=20, r=20))
+        legend=dict(font=dict(color="white", size=10),
+                    bgcolor="#2a2a4a", bordercolor="#555", borderwidth=1),
+        margin=dict(t=60, b=20, l=20, r=20))
     return fig
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TOOL 1 — RESTRICTION DIGEST PLANNER
 # ══════════════════════════════════════════════════════════════════════════════
 if tool == "Restriction Digest Planner":
-    st.markdown("### 🔬 Restriction Digest Planner")
+    st.markdown("### 🧪 Restriction Digest Planner")
     st.markdown("Automatically identifies optimal enzyme combinations for diagnostic restriction analysis of circular plasmids.")
 
     with st.sidebar:
@@ -478,6 +460,16 @@ if tool == "Restriction Digest Planner":
                 fig = draw_gel(best, plasmid_size,
                                title_suffix=f" — {plasmid_name} — min {min_f} bands")
                 st.plotly_chart(fig, use_container_width=True)
+
+                # Plasmid map for top result
+                with st.expander("🗺️ Show plasmid restriction map for top result"):
+                    top_enzymes = best[0]["enzyme_list"]
+                    fig_map = draw_plasmid_map(
+                        plasmid_seq, plasmid_size, plasmid_name, top_enzymes)
+                    if fig_map:
+                        st.plotly_chart(fig_map, use_container_width=False)
+                    else:
+                        st.write("No cut sites to display.")
     else:
         st.info("👈 Configure parameters in the sidebar and click **Run Analysis** to begin.")
         st.markdown("""
@@ -494,13 +486,12 @@ if tool == "Restriction Digest Planner":
 # TOOL 2 — MULTI-PLASMID COMPARATOR
 # ══════════════════════════════════════════════════════════════════════════════
 elif tool == "Multi-Plasmid Comparator":
-    st.markdown("### 🔬 Multi-Plasmid Comparator")
+    st.markdown("### 🔀 Multi-Plasmid Comparator")
     st.markdown("Compare restriction digest patterns across multiple plasmids — identifies enzymes that discriminate between constructs.")
 
     with st.sidebar:
         st.header("⚙️ Parameters")
 
-        st.subheader("📂 Upload Plasmids")
         uploaded_files = st.file_uploader(
             "Upload 2 or more plasmid sequences",
             type=["fasta", "fa", "fas", "gb", "gbk", "genbank", "sbd"],
@@ -537,7 +528,6 @@ elif tool == "Multi-Plasmid Comparator":
             st.error("❌ Please upload at least 2 plasmid sequences to compare.")
             st.stop()
 
-        # Load all plasmids
         plasmids = []
         for f in uploaded_files:
             seq, demo, name = load_sequence(f)
@@ -550,7 +540,6 @@ elif tool == "Multi-Plasmid Comparator":
 
         st.success(f"✅ Loaded {len(plasmids)} plasmids: {', '.join(p['name'] for p in plasmids)}")
 
-        # Find cutting enzymes per plasmid
         resolved = [getattr(Restriction, e) for e in selected_enzymes2 if hasattr(Restriction, e)]
         cut_data = {}
         for p in plasmids:
@@ -558,42 +547,29 @@ elif tool == "Multi-Plasmid Comparator":
             results = rb.search(Seq(p["seq"]), linear=False)
             cut_data[p["name"]] = {e.__name__: sites for e, sites in results.items() if sites}
 
-        # Find discriminating enzymes (cut in some but not all)
         all_cutting = set()
         for d in cut_data.values():
             all_cutting.update(d.keys())
 
         discriminating = []
         universal = []
-        unique_per_plasmid = {p["name"]: [] for p in plasmids}
-
         for enz in all_cutting:
             cuts_in = [p["name"] for p in plasmids if enz in cut_data[p["name"]]]
             if len(cuts_in) == len(plasmids):
                 universal.append(enz)
             else:
                 discriminating.append(enz)
-                for p in plasmids:
-                    if enz in cut_data[p["name"]] and len(cuts_in) < len(plasmids):
-                        unique_per_plasmid[p["name"]].append(enz)
 
         st.divider()
         st.subheader("🔍 Enzyme Overview")
-
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**✅ Cut in ALL plasmids (universal)**")
-            if universal:
-                st.write(", ".join(sorted(universal)))
-            else:
-                st.write("None")
-
+            st.write(", ".join(sorted(universal)) if universal else "None")
         with col2:
             st.markdown("**⚡ Discriminating enzymes (cut in some but not all)**")
-            if discriminating:
-                st.write(", ".join(sorted(discriminating)))
-            else:
-                st.write("None — all plasmids have identical cut patterns")
+            st.write(", ".join(sorted(discriminating)) if discriminating else
+                     "None — all plasmids have identical cut patterns")
 
         st.divider()
         st.subheader("📊 Cut Pattern Matrix")
@@ -606,17 +582,13 @@ elif tool == "Multi-Plasmid Comparator":
                 else:
                     row[p["name"]] = "❌"
             matrix_data[enz] = row
-
         matrix_df = pd.DataFrame(matrix_data).T
         matrix_df.index.name = "Enzyme"
         st.dataframe(matrix_df, use_container_width=True)
 
-        # Find best discriminating digest combos
         st.divider()
         st.subheader("🏆 Best Discriminating Digest Combinations")
-        st.markdown("Enzyme combinations that produce **clearly different band patterns** across plasmids:")
 
-        # For each combination, compute fragments per plasmid and score difference
         disc_resolved = [getattr(Restriction, e) for e in discriminating if hasattr(Restriction, e)]
         also_use = [getattr(Restriction, e) for e in universal if hasattr(Restriction, e)]
         all_for_combo = disc_resolved + also_use
@@ -624,7 +596,6 @@ elif tool == "Multi-Plasmid Comparator":
         combo_scores = []
         for size in range(1, combo_max2 + 1):
             for combo in combinations(all_for_combo, size):
-                # Must include at least one discriminating enzyme
                 combo_names = [e.__name__ for e in combo]
                 if not any(e in discriminating for e in combo_names):
                     continue
@@ -643,22 +614,19 @@ elif tool == "Multi-Plasmid Comparator":
                 if not valid:
                     continue
 
-                # Score: how different are the patterns?
-                # Compare all pairs of plasmids
                 diff_score = 0
                 for i in range(len(frag_sets)):
                     for j in range(i+1, len(frag_sets)):
-                        # Different number of bands = good
                         if len(frag_sets[i]) != len(frag_sets[j]):
                             diff_score += 2
                         else:
-                            # Same number — check size differences
-                            diffs = [abs(a-b) / max(a,b)
+                            diffs = [abs(a-b) / max(a, b)
                                      for a, b in zip(sorted(frag_sets[i]), sorted(frag_sets[j]))]
                             diff_score += sum(diffs)
 
                 combo_scores.append({
                     "enzymes": " + ".join(combo_names),
+                    "enzyme_list": combo_names,
                     "frag_sets": frag_sets,
                     "diff_score": diff_score
                 })
@@ -669,7 +637,6 @@ elif tool == "Multi-Plasmid Comparator":
         if not top_combos:
             st.error("No discriminating combinations found with current settings.")
         else:
-            # Show table
             rows = []
             for i, c in enumerate(top_combos):
                 row = {"Rank": i+1, "Enzyme(s)": c["enzymes"]}
@@ -678,11 +645,10 @@ elif tool == "Multi-Plasmid Comparator":
                 rows.append(row)
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-            # Show gel for each combo — all plasmids side by side
             st.subheader("🧫 Predicted Gel — All Plasmids per Combination")
             max_size = max(p["size"] for p in plasmids)
 
-            for i, combo in enumerate(top_combos[:5]):  # show top 5 gels
+            for i, combo in enumerate(top_combos[:5]):
                 st.markdown(f"**#{i+1} — {combo['enzymes']}**")
                 gel_results = []
                 lane_labels = []
@@ -698,104 +664,26 @@ elif tool == "Multi-Plasmid Comparator":
                                title_suffix=f" — {combo['enzymes']}",
                                lane_labels=lane_labels)
                 st.plotly_chart(fig, use_container_width=True)
+
+                # Plasmid map per plasmid for this combo
+                with st.expander(f"🗺️ Show restriction maps for this digest combination"):
+                    map_cols = st.columns(len(plasmids))
+                    for j, p in enumerate(plasmids):
+                        with map_cols[j]:
+                            st.markdown(f"**{p['name']}**")
+                            fig_map = draw_plasmid_map(
+                                p["seq"], p["size"], p["name"], combo["enzyme_list"])
+                            if fig_map:
+                                st.plotly_chart(fig_map, use_container_width=True)
+                            else:
+                                st.write("No cut sites.")
     else:
         st.info("👈 Upload at least 2 plasmid sequences and click **Run Comparison**.")
         st.markdown("""
         **What this tool does:**
-        - Identifies enzymes that cut some plasmids but not others (discriminating enzymes)
-        - Finds the best enzyme combinations to distinguish between your constructs
-        - Shows a predicted gel with all plasmids side by side for each top combination
+        - Identifies enzymes that cut some plasmids but not others
+        - Finds the best enzyme combinations to distinguish between constructs
+        - Shows a predicted gel with all plasmids side by side
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TOOL 3 — CUT SITE MAP
-# ══════════════════════════════════════════════════════════════════════════════
-elif tool == "Cut Site Map":
-    st.markdown("### 🔬 Restriction Site Map")
-    st.markdown("Visualise all restriction enzyme recognition sites on a circular plasmid map.")
-
-    with st.sidebar:
-        st.header("⚙️ Parameters")
-
-        uploaded_file3 = st.file_uploader(
-            "Upload plasmid sequence",
-            type=["fasta", "fa", "fas", "gb", "gbk", "genbank", "sbd"],
-            help="Accepted formats: FASTA, GenBank, SeqBuilder Pro (.sbd)",
-            key="uploader_3")
-
-        run3 = st.button("▶  Generate Map", type="primary", use_container_width=True, key="run_3")
-
-        st.divider()
-        st.subheader("🧪 Enzyme Selection")
-        select_all3 = st.checkbox("Select all enzymes", value=True, key="sel_all_3")
-        if select_all3:
-            selected_enzymes3 = DEFAULT_ENZYMES
-        else:
-            selected_enzymes3 = st.multiselect(
-                "Select enzymes to display:",
-                DEFAULT_ENZYMES, default=DEFAULT_ENZYMES[:10], key="enz_3")
-
-        show_non_cutters = st.checkbox(
-            "Show enzymes with no recognition site",
-            value=False)
-
-    if run3:
-        plasmid_seq3, demo3, plasmid_name3 = load_sequence(uploaded_file3)
-
-        if plasmid_seq3 is None:
-            st.error("❌ Unable to read file.")
-            st.stop()
-
-        plasmid_size3 = len(plasmid_seq3)
-
-        if demo3:
-            st.warning("⚠️ Running in demo mode with a randomly generated 10 kb plasmid.")
-        else:
-            st.success(f"✅ **{plasmid_name3}** — {plasmid_size3} bp")
-
-        # Cut site table
-        resolved3 = [getattr(Restriction, e) for e in selected_enzymes3 if hasattr(Restriction, e)]
-        rb3 = Restriction.RestrictionBatch(resolved3)
-        sr3 = rb3.search(Seq(plasmid_seq3), linear=False)
-
-        cutting3 = {e.__name__: sites for e, sites in sr3.items() if sites}
-        non_cutting3 = [e.__name__ for e, sites in sr3.items() if not sites]
-
-        col1, col2 = st.columns([2, 1])
-
-        with col1:
-            fig_map = draw_cut_site_map(
-                plasmid_seq3, plasmid_size3, plasmid_name3, selected_enzymes3)
-            if fig_map:
-                st.plotly_chart(fig_map, use_container_width=False)
-            else:
-                st.warning("No enzymes cut this plasmid with the current selection.")
-
-        with col2:
-            st.markdown("**Recognition sites found:**")
-            if cutting3:
-                site_df = pd.DataFrame([{
-                    "Enzyme": enz,
-                    "Cuts": len(sites),
-                    "Positions (bp)": ", ".join(str(s) for s in sites)
-                } for enz, sites in sorted(cutting3.items())])
-                st.dataframe(site_df, use_container_width=True, hide_index=True)
-            else:
-                st.write("None")
-
-            if show_non_cutters and non_cutting3:
-                st.markdown("**No recognition site:**")
-                st.caption(", ".join(sorted(non_cutting3)))
-    else:
-        st.info("👈 Upload a plasmid sequence and click **Generate Map**.")
-        st.markdown("""
-        **What this tool does:**
-        - Draws a circular plasmid map with all restriction site positions
-        - Lists all enzymes with their cut positions
-        - Hover over a site to see enzyme name and exact position
-
-        **Tip:** Use enzyme selection to focus on enzymes relevant to your cloning strategy.
-        """)
-
