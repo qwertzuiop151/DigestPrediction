@@ -347,10 +347,14 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
 
     if all_cuts:
         n_cuts = len(all_cuts)
-        seg_colors = [
-            "#3a3a6a", "#2a4a3a", "#4a3a2a", "#3a2a4a",
-            "#2a3a4a", "#4a2a3a", "#3a4a2a", "#4a4a2a",
+        # Distinct perceptually-spaced colors for fragments
+        seg_palette = [
+            "#4e79a7", "#f28e2b", "#e15759", "#76b7b2",
+            "#59a14f", "#edc948", "#b07aa1", "#ff9da7",
+            "#9c755f", "#bab0ac", "#d37295", "#a0cbe8",
         ]
+        # Generate enough colors for any number of fragments
+        seg_colors = [seg_palette[i % len(seg_palette)] for i in range(n_cuts)]
         for idx in range(n_cuts):
             start = all_cuts[idx]
             end = all_cuts[(idx + 1) % n_cuts]
@@ -371,7 +375,7 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
             x_inner = r_inner * np.cos(arc_angles[::-1])
             y_inner = r_inner * np.sin(arc_angles[::-1])
 
-            seg_color = seg_colors[idx % len(seg_colors)]
+            seg_color = seg_colors[idx]
             fig.add_trace(go.Scatter(
                 x=np.concatenate([x_outer, x_inner]),
                 y=np.concatenate([y_outer, y_inner]),
