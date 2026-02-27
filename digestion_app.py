@@ -12,12 +12,12 @@ from scipy.optimize import linear_sum_assignment
 
 # ── PAGE SETTINGS ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Plasmid Analysis Suite",
+    page_title="Plasmid Analysis Toolkit",
     page_icon="🧬",
     layout="wide"
 )
 
-st.title("🧬 Plasmid Analysis Suite")
+st.title("🧬 Plasmid Analysis Toolkit")
 
 st.markdown("""
 <style>
@@ -42,7 +42,7 @@ st.sidebar.markdown("""
         Select Analysis Module
     </div>
     <div style="font-size: 1.25rem; font-weight: 800; color: #ffffff; line-height: 1.3;">
-        🧬 Plasmid Analysis Suite
+        🧬 Plasmid Analysis Toolkit
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -693,7 +693,7 @@ elif tool == "Multi-Plasmid Comparator":
             if seq:
                 plasmids.append({"seq": seq, "name": name, "size": len(seq)})
         # Add pasted sequences
-        for raw_paste, default_name in [(pasted_seq_2a, "Sequence A"), (pasted_seq_2b, "Sequence B")]:
+        for raw_paste, default_name in pasted_seqs_2:
             if raw_paste and raw_paste.strip():
                 seq, name = parse_pasted_sequence(raw_paste, default_name)
                 if seq:
