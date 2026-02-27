@@ -34,21 +34,47 @@ st.sidebar.markdown("""
     background: linear-gradient(135deg, #1e1e3f 0%, #2d1b69 100%);
     border: 1px solid #7c3aed;
     border-radius: 10px;
-    padding: 1rem 1.1rem 0.6rem 1.1rem;
-    margin-bottom: 0.8rem;
+    padding: 1rem 1.1rem 0.8rem 1.1rem;
+    margin-bottom: 1rem;
 ">
-    <div style="font-size: 0.7rem; font-weight: 700; color: #a78bfa;
-                letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0.5rem;">
+    <div style="font-size: 0.65rem; font-weight: 700; color: #a78bfa;
+                letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 0.4rem;">
+        🧬 Plasmid Analysis Toolkit
+    </div>
+    <div style="font-size: 1.05rem; font-weight: 700; color: #ffffff; margin-bottom: 1rem;">
         Select Analysis Module
     </div>
-    <div style="font-size: 1.25rem; font-weight: 800; color: #ffffff; line-height: 1.3;">
-        🧬 Plasmid Analysis Toolkit
+    <div style="
+        background: rgba(124, 58, 237, 0.15);
+        border: 1px solid #7c3aed;
+        border-radius: 8px;
+        padding: 0.65rem 0.85rem;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+    ">
+        <div style="font-size: 1.0rem; font-weight: 700; color: #ffffff;">🧪 Restriction Digest Planner</div>
+        <div style="font-size: 0.78rem; color: #c4b5fd; margin-top: 0.2rem; line-height: 1.4;">
+            Identify optimal enzyme combinations for a single plasmid.
+            Ranked by predicted gel separation quality.
+        </div>
+    </div>
+    <div style="
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid #10b981;
+        border-radius: 8px;
+        padding: 0.65rem 0.85rem;
+    ">
+        <div style="font-size: 1.0rem; font-weight: 700; color: #ffffff;">🔀 Multi-Plasmid Comparator</div>
+        <div style="font-size: 0.78rem; color: #6ee7b7; margin-top: 0.2rem; line-height: 1.4;">
+            Compare digest patterns across multiple constructs.
+            Finds enzymes that discriminate between plasmids.
+        </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 tool = st.sidebar.radio(
-    label="",
+    label="Active module:",
     options=["Restriction Digest Planner", "Multi-Plasmid Comparator"],
     index=0,
     format_func=lambda x: (
@@ -65,12 +91,6 @@ div[role="radiogroup"] label {
 }
 </style>""", unsafe_allow_html=True)
 
-tool_descriptions = {
-    "Restriction Digest Planner": "Identifies optimal enzyme combinations for diagnostic restriction analysis of circular plasmids. Results ranked by gel separation quality.",
-    "Multi-Plasmid Comparator": "Compares restriction digest patterns across multiple constructs and identifies enzyme combinations that discriminate between plasmids.",
-}
-
-st.sidebar.caption(tool_descriptions[tool])
 st.sidebar.divider()
 
 # ── ENZYMES ────────────────────────────────────────────────────────────────────
