@@ -1728,98 +1728,204 @@ elif tool == "Feature Annotation Viewer":
             })
         feat_df = pd.DataFrame(feat_rows).sort_values("Start") if feat_rows else pd.DataFrame()
 
-        col_map, col_table = st.columns([1.15, 1], gap="large")
+        # ── helper: draw linear map for a region ───────────────────────────────
+        def draw_linear_map(feats, seq_start, seq_end):
+            fig_lin = go.Figure()
+            # Backbone
+            fig_lin.add_shape(type="line",
+                x0=seq_start, x1=seq_end, y0=0.5, y1=0.5,
+                line=dict(color="#444466", width=5))
+            # Strand arrows on backbone
+            for tick in range(seq_start, seq_end, max(1, (seq_end - seq_start) // 20)):
+                fig_lin.add_annotation(x=tick, y=0.5, text="›",
+                    showarrow=False, font=dict(color="#555577", size=10))
 
-        with col_map:
-            with st.spinner("Rendering map..."):
-                fig_annot, _ = draw_annotation_map(filtered, show_labels=show_labels)
-                st.plotly_chart(fig_annot, use_container_width=True, key="feat_map")
+            track_fwd, track_rev = {}, {}
+            for feat in feats:
+                if feat.type == "source":
+                    continue
+                _pk = primer_type_key(feat)
+                dt = _pk if _pk else feat.type
+                color = FEATURE_COLORS.get(dt, DEFAULT_COLOR)
+                fs = int(feat.location.start) + 1
+                fe = int(feat.location.end)
+                strand = feat.location.strand
+                lbl = get_label(feat)
+                hover = (f"<b>{lbl}</b><br>Type: {dt}<br>"
+                         f"{fs:,}–{fe:,} bp<br>"
+                         f"{'(+) forward' if strand==1 else '(-) reverse'}<br>"
+                         f"Size: {fe-fs+1:,} bp")
 
-            # Linear zoom panel
-            if zoom_enabled and zoom_start and zoom_end and zoom_start < zoom_end:
-                st.markdown(f"**Region {zoom_start:,} – {zoom_end:,} bp**")
-                region_feats = [f for f in filtered.features
-                                if f.type != "source"
-                                and int(f.location.start) < zoom_end
-                                and int(f.location.end) > zoom_start]
-                if region_feats:
-                    fig_linear = go.Figure()
-                    fig_linear.add_shape(type="line",
-                        x0=zoom_start, x1=zoom_end, y0=0.5, y1=0.5,
-                        line=dict(color="#444466", width=6))
-                    for fi, feat in enumerate(region_feats):
-                        color = FEATURE_COLORS.get(feat.type, DEFAULT_COLOR)
-                        fs = max(int(feat.location.start) + 1, zoom_start)
-                        fe = min(int(feat.location.end), zoom_end)
-                        strand = feat.location.strand
-                        y_pos = 0.7 if strand != -1 else 0.3
-                        lbl = get_label(feat)
-                        fig_linear.add_shape(type="rect",
-                            x0=fs, x1=fe, y0=y_pos - 0.12, y1=y_pos + 0.12,
-                            fillcolor=color, opacity=0.85,
-                            line=dict(width=0))
-                        fig_linear.add_trace(go.Scatter(
-                            x=[(fs + fe) / 2], y=[y_pos],
-                            mode="markers", marker=dict(size=1, opacity=0),
-                            text=f"<b>{lbl}</b><br>{feat.type}<br>{int(feat.location.start)+1:,}–{int(feat.location.end):,} bp",
-                            hoverinfo="text", showlegend=False))
-                        if fe - fs > (zoom_end - zoom_start) * 0.04:
-                            fig_linear.add_annotation(
-                                x=(fs + fe) / 2, y=y_pos,
-                                text=lbl[:16], showarrow=False,
-                                font=dict(color="white", size=9),
-                                xanchor="center", yanchor="middle")
-                    fig_linear.add_annotation(x=(zoom_start + zoom_end)/2, y=0.08,
-                        text="← reverse strand", showarrow=False,
-                        font=dict(color="#666", size=9))
-                    fig_linear.add_annotation(x=(zoom_start + zoom_end)/2, y=0.92,
-                        text="forward strand →", showarrow=False,
-                        font=dict(color="#666", size=9))
-                    fig_linear.update_layout(
-                        paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
-                        xaxis=dict(showgrid=False, color="#666",
-                                   range=[zoom_start, zoom_end],
-                                   tickformat=","),
-                        yaxis=dict(showgrid=False, showticklabels=False,
-                                   range=[0, 1]),
-                        height=200, margin=dict(t=10, b=30, l=10, r=10),
-                        hovermode="closest")
-                    st.plotly_chart(fig_linear, use_container_width=True, key="linear_zoom")
+                # Track assignment to avoid vertical overlap
+                tracks = track_fwd if strand != -1 else track_rev
+                track_n = 0
+                while any(not (fe < ts or fs > te)
+                          for ts, te, tn in tracks.values() if tn == track_n):
+                    track_n += 1
+                tracks[id(feat)] = (fs, fe, track_n)
+
+                if strand != -1:
+                    y_base = 0.62 + track_n * 0.14
                 else:
-                    st.caption("No features in selected region.")
+                    y_base = 0.38 - track_n * 0.14
+                h = 0.09
 
-        with col_table:
-            n_feats = len(feat_df) if not feat_df.empty else 0
-            st.subheader(f"Features ({n_feats})")
+                # Feature rect
+                fig_lin.add_shape(type="rect",
+                    x0=fs, x1=fe, y0=y_base - h, y1=y_base + h,
+                    fillcolor=color, opacity=0.88, line=dict(width=0))
+                # Arrow tip
+                tip_x = fe if strand != -1 else fs
+                back_x = fe - (fe-fs)*0.08 if strand != -1 else fs + (fe-fs)*0.08
+                fig_lin.add_shape(type="path",
+                    path=f"M {back_x},{y_base+h} L {tip_x},{y_base} L {back_x},{y_base-h} Z",
+                    fillcolor=color, line=dict(width=0), opacity=1.0)
+                # Hover
+                fig_lin.add_trace(go.Scatter(
+                    x=[(fs+fe)/2], y=[y_base],
+                    mode="markers", marker=dict(size=1, opacity=0),
+                    text=hover, hoverinfo="text", showlegend=False))
+                # Label if wide enough
+                if (fe - fs) > (seq_end - seq_start) * 0.03:
+                    fig_lin.add_annotation(
+                        x=(fs+fe)/2, y=y_base, text=lbl[:18],
+                        showarrow=False, font=dict(color="white", size=8),
+                        xanchor="center", yanchor="middle")
 
-            # Search box
-            search = st.text_input("Search features", placeholder="Gene name, type, position...",
-                                   key="feat_search")
-            if search and not feat_df.empty:
-                mask = feat_df.apply(
-                    lambda row: search.lower() in str(row).lower(), axis=1)
-                feat_df = feat_df[mask]
-                st.caption(f'{len(feat_df)} match(es) for "{search}"')
+            fig_lin.add_annotation(x=(seq_start+seq_end)/2, y=0.10,
+                text="← reverse  |  forward →", showarrow=False,
+                font=dict(color="#555", size=8))
+            n_ticks = min(10, (seq_end - seq_start) // 100 + 2)
+            fig_lin.update_layout(
+                paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
+                xaxis=dict(showgrid=True, gridcolor="#2a2a3e", color="#888",
+                           range=[seq_start, seq_end], tickformat=",",
+                           nticks=n_ticks, title="Position (bp)"),
+                yaxis=dict(showgrid=False, showticklabels=False, range=[0, 1]),
+                height=300, margin=dict(t=10, b=40, l=10, r=10),
+                hovermode="closest", dragmode="pan")
+            return fig_lin
 
-            if not feat_df.empty:
-                def color_type(val):
-                    c = FEATURE_COLORS.get(val, DEFAULT_COLOR)
-                    return f"background-color: {c}22; color: {c}; font-weight: 600"
+        # ── tabs: circular | linear | sequence ──────────────────────────────
+        tab_circ, tab_lin, tab_seq = st.tabs(
+            ["🔵 Circular Map", "➖ Linear Map", "🔤 Sequence"])
 
-                st.dataframe(
-                    feat_df.style.applymap(color_type, subset=["Type"]),
-                    use_container_width=True, hide_index=True, height=540)
+        with tab_circ:
+            col_map, col_table = st.columns([1.15, 1], gap="large")
+            with col_map:
+                with st.spinner("Rendering map..."):
+                    fig_annot, _ = draw_annotation_map(filtered, show_labels=show_labels)
+                    st.plotly_chart(fig_annot, use_container_width=True, key="feat_map")
+
+            with col_table:
+                n_feats = len(feat_df) if not feat_df.empty else 0
+                st.subheader(f"Features ({n_feats})")
+                search = st.text_input("Search features",
+                    placeholder="Gene name, type, position...", key="feat_search")
+                if search and not feat_df.empty:
+                    mask = feat_df.apply(
+                        lambda row: search.lower() in str(row).lower(), axis=1)
+                    feat_df = feat_df[mask]
+                    st.caption(f'{len(feat_df)} match(es) for "{search}"')
+                if not feat_df.empty:
+                    def color_type(val):
+                        c = FEATURE_COLORS.get(val, DEFAULT_COLOR)
+                        return f"background-color: {c}22; color: {c}; font-weight: 600"
+                    st.dataframe(
+                        feat_df.style.applymap(color_type, subset=["Type"]),
+                        use_container_width=True, hide_index=True, height=500)
+                else:
+                    st.caption("No features to display.")
+                gb_out = io.StringIO()
+                SeqIO.write(record, gb_out, "genbank")
+                st.download_button("Download GenBank", data=gb_out.getvalue(),
+                    file_name=f"{plasmid_name}.gb", mime="text/plain")
+
+        with tab_lin:
+            st.markdown(f"**{plasmid_name}  —  {plasmid_size:,} bp  (linear view)**")
+            # Region selector
+            lc1, lc2 = st.columns(2)
+            with lc1:
+                lin_start = st.number_input("From (bp)", min_value=1,
+                    max_value=plasmid_size, value=1, step=50, key="lin_start")
+            with lc2:
+                lin_end = st.number_input("To (bp)", min_value=1,
+                    max_value=plasmid_size, value=plasmid_size, step=50, key="lin_end")
+            if lin_start < lin_end:
+                region_feats_lin = [f for f in filtered.features
+                    if f.type != "source"
+                    and int(f.location.start) < lin_end
+                    and int(f.location.end) > lin_start]
+                st.plotly_chart(
+                    draw_linear_map(region_feats_lin, lin_start, lin_end),
+                    use_container_width=True, key="linear_full")
             else:
-                st.caption("No features to display.")
+                st.warning("Start must be less than End.")
 
-            # GenBank download
-            gb_out = io.StringIO()
-            SeqIO.write(record, gb_out, "genbank")
-            st.download_button(
-                "Download GenBank",
-                data=gb_out.getvalue(),
-                file_name=f"{plasmid_name}.gb",
-                mime="text/plain")
+        with tab_seq:
+            st.markdown(f"**Sequence viewer  —  {plasmid_size:,} bp**")
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                seq_from = st.number_input("From (bp)", min_value=1,
+                    max_value=plasmid_size, value=1, step=10, key="seq_from")
+            with sc2:
+                seq_to = st.number_input("To (bp)", min_value=1,
+                    max_value=plasmid_size, value=min(200, plasmid_size),
+                    step=10, key="seq_to")
+
+            seq_str = str(record.seq)
+
+            if seq_from <= seq_to:
+                region_seq = seq_str[seq_from - 1: seq_to]
+
+                # Display with position numbers, 60 nt per line
+                lines = []
+                for i in range(0, len(region_seq), 60):
+                    pos = seq_from + i
+                    chunk = region_seq[i:i+60]
+                    spaced = " ".join(chunk[j:j+10] for j in range(0, len(chunk), 10))
+                    lines.append(f"{pos:>8}  {spaced}")
+                seq_display = "\n".join(lines)
+
+                st.code(seq_display, language=None)
+
+                # Features overlapping this region
+                region_feats_seq = [f for f in filtered.features
+                    if f.type != "source"
+                    and int(f.location.start) < seq_to
+                    and int(f.location.end) > seq_from - 1]
+                if region_feats_seq:
+                    st.caption("Features in this region: " +
+                        ", ".join(f"{get_label(f)} ({int(f.location.start)+1}–{int(f.location.end)})"
+                                  for f in region_feats_seq))
+
+                # Edit region
+                with st.expander("✏️ Edit this region"):
+                    st.warning("Editing replaces the sequence in this region. "
+                               "Download the modified GenBank after saving.")
+                    edited = st.text_area("Edit sequence (ATCG only)",
+                        value=region_seq, height=120, key="seq_edit")
+                    if st.button("Apply edit & update GenBank", key="apply_edit"):
+                        edited_clean = re.sub(r"[^ATCGatcg]", "", edited).upper()
+                        new_seq = seq_str[:seq_from-1] + edited_clean + seq_str[seq_to:]
+                        from Bio.Seq import Seq as _Seq
+                        from Bio.SeqRecord import SeqRecord as _SR
+                        new_record = record.__class__(
+                            _Seq(new_seq), id=record.id, name=record.name,
+                            description=record.description,
+                            features=record.features, annotations=record.annotations)
+                        gb_edit = io.StringIO()
+                        SeqIO.write(new_record, gb_edit, "genbank")
+                        st.download_button(
+                            "Download modified GenBank",
+                            data=gb_edit.getvalue(),
+                            file_name=f"{plasmid_name}_edited.gb",
+                            mime="text/plain",
+                            key="dl_edited")
+                        st.success(f"Region {seq_from}–{seq_to} replaced "
+                                   f"({len(region_seq)} → {len(edited_clean)} bp).")
+            else:
+                st.warning("From must be ≤ To.")
     else:
         st.info("👈 Upload a GenBank file (.gb or .gbk) with feature annotations.")
         st.markdown("""
