@@ -244,7 +244,7 @@ with st.sidebar:
 
     min_frag = st.slider("Min fragment size (bp)", 100, 3000, 250, 50)
     max_frag = st.slider("Max fragment size (bp)", 1000, 50000, 8000, 500)
-    min_frags = st.slider("Min number of bands", 1, 6, 3)
+    min_frags = st.number_input("Starting minimum bands (n)", min_value=1, max_value=8, value=3, step=1)
     max_frags = st.slider("Max number of bands", 2, 10, 6)
     min_diff = st.slider("Min size difference", 0.05, 0.5, 0.15, 0.05)
     combo_min = st.slider("Min enzymes per digest", 1, 3, 1)
@@ -275,7 +275,7 @@ if run:
     else:
         st.success(f"✅ Plasmid loaded: {plasmid_size} bp")
 
-    for min_f in [3, 4]:
+    for min_f in [min_frags, min_frags + 1]:
         st.divider()
         st.subheader(f"Analysis — minimum {min_f} bands")
 
@@ -313,4 +313,5 @@ else:
     
     **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
+
 
