@@ -394,9 +394,10 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
                           x0=0.76 * np.cos(angle), y0=0.76 * np.sin(angle),
                           x1=1.04 * np.cos(angle), y1=1.04 * np.sin(angle),
                           line=dict(color=color, width=2.5))
+            # Hover marker placed outside the ring to avoid covering small fragments
             fig.add_trace(go.Scatter(
-                x=[0.90 * np.cos(angle)], y=[0.90 * np.sin(angle)],
-                mode="markers", marker=dict(size=8, color=color, opacity=0),
+                x=[1.12 * np.cos(angle)], y=[1.12 * np.sin(angle)],
+                mode="markers", marker=dict(size=6, color=color, opacity=0.01),
                 hovertemplate=(
                     f"<b>{enz_name}</b><br>"
                     f"Position: {site} bp<br>"
