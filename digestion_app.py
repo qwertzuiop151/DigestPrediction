@@ -1302,21 +1302,22 @@ elif tool == "Feature Annotation Viewer":
     st.markdown("### 🗺️ Feature Annotation Viewer")
     st.markdown("Visualise annotated features on an interactive circular plasmid map from a GenBank file.")
 
+    # Wong (2011) colorblind-safe palette — optimised for red-green colour vision deficiency
     FEATURE_COLORS = {
-        "CDS":          "#4e79a7",
-        "gene":         "#f28e2b",
-        "promoter":     "#e15759",
-        "terminator":   "#76b7b2",
-        "rep_origin":   "#59a14f",
-        "primer_bind":  "#edc948",
-        "misc_feature": "#b07aa1",
-        "regulatory":   "#ff9da7",
-        "LTR":          "#9c755f",
-        "RBS":          "#bab0ac",
-        "sig_peptide":  "#d37295",
-        "mat_peptide":  "#a0cbe8",
+        "CDS":          "#0072B2",  # blue
+        "gene":         "#E69F00",  # orange
+        "promoter":     "#F0E442",  # yellow
+        "terminator":   "#56B4E9",  # sky blue
+        "rep_origin":   "#009E73",  # bluish green (distinguishable from red)
+        "primer_bind":  "#CC79A7",  # reddish purple
+        "misc_feature": "#D55E00",  # vermillion
+        "regulatory":   "#0096FF",  # bright blue
+        "LTR":          "#F5C542",  # golden yellow
+        "RBS":          "#56B4E9",  # sky blue
+        "sig_peptide":  "#CC79A7",  # reddish purple
+        "mat_peptide":  "#009E73",  # bluish green
     }
-    DEFAULT_COLOR = "#888888"
+    DEFAULT_COLOR = "#aaaaaa"
 
     def get_label(feat):
         return (feat.qualifiers.get("product", [""])[0] or
