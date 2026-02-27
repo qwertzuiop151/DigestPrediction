@@ -1305,7 +1305,7 @@ elif tool == "Feature Annotation Viewer":
     # Wong (2011) colorblind-safe palette — optimised for red-green colour vision deficiency
     FEATURE_COLORS = {
         "CDS":              "#0072B2",  # blue
-        "gene":             "#E69F00",  # orange
+        "gene":             "#777788",  # neutral grey — gene features are often just containers
         "promoter":         "#F0E442",  # yellow
         "terminator":       "#56B4E9",  # sky blue
         "rep_origin":       "#009E73",  # bluish green
