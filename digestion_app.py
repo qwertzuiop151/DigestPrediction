@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import re
 import random
 import io
+import pandas as pd
 
 # ── PAGE SETTINGS ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -109,7 +110,7 @@ def score_combination(fragments, min_frag, max_frag, min_frags, max_frags, min_d
 
 def find_best_digests(plasmid_sequence, selected_enzymes,
                       min_frag, max_frag, min_frags, max_frags,
-                      min_diff, combo_size, top_n):
+                      min_diff, combo_size, top_n, prefer_short=False):
     plasmid_seq = Seq(plasmid_sequence.upper())
     plasmid_size = len(plasmid_seq)
     resolved = [getattr(Restriction, e) for e in selected_enzymes if hasattr(Restriction, e)]
@@ -133,9 +134,14 @@ def find_best_digests(plasmid_sequence, selected_enzymes,
                     "score": score
                 })
 
+    if prefer_short:
+        results.sort(key=lambda x: max(x["fragments"]))
+    else:
+        results.sort(key=lambda x: x["score"])
+
     seen = []
     unique_results = []
-    for r in sorted(results, key=lambda x: x["score"]):
+    for r in results:
         if r["fragments"] not in seen:
             seen.append(r["fragments"])
             unique_results.append(r)
@@ -156,7 +162,6 @@ def draw_gel(results, plasmid_size, title_suffix=""):
     def bp_to_y(bp):
         return np.log10(bp)
 
-    # Fixe Spurbreite unabhängig von Anzahl der Ergebnisse
     lane_width = 0.25
     band_height = 0.006
     band_height_thick = 0.008
@@ -229,7 +234,6 @@ def draw_gel(results, plasmid_size, title_suffix=""):
                    range=[-1.2, len(results) + 0.5]),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
                    range=[y_min - 0.1, y_max + 0.3]),
-        # Fixe Breite: 75px pro Spur — unabhängig vom Fenster
         height=600,
         width=max(600, n_lanes * 75),
         margin=dict(t=100, b=20, l=80, r=20),
@@ -254,9 +258,10 @@ with st.sidebar:
 
     min_frag = st.slider("Min fragment size (bp)", 100, 3000, 250, 50)
     max_frag = st.slider("Max fragment size (bp)", 1000, 50000, 8000, 500)
-    min_frags = st.slider("Min number of bands", 1,8, 3)
+    min_frags = st.slider("Min number of bands (n)", 1, 8, 3)
     max_frags = st.slider("Max number of bands", 2, 10, 6)
     min_diff = st.slider("Min size difference", 0.05, 0.5, 0.15, 0.05)
+    prefer_short = st.checkbox("Prefer short fragments (faster on gel)", value=False)
     combo_min = st.slider("Min enzymes per digest", 1, 3, 1)
     combo_max = st.slider("Max enzymes per digest", 1, 3, 2)
     top_n = st.slider("Top N results", 1, 20, 10)
@@ -293,14 +298,14 @@ if run:
             best, cutting = find_best_digests(
                 plasmid_seq, selected_enzymes,
                 min_frag, max_frag, min_f, max_frags,
-                min_diff, (combo_min, combo_max), top_n)
+                min_diff, (combo_min, combo_max), top_n,
+                prefer_short=prefer_short)
 
         st.caption(f"Enzymes that cut: {', '.join(e.__name__ for e in cutting)}")
 
         if not best:
             st.error("No combinations found — try adjusting the parameters!")
         else:
-            import pandas as pd
             df = pd.DataFrame([{
                 "#": i+1,
                 "Enzymes": r["enzymes"],
@@ -323,6 +328,3 @@ else:
 
     **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
-
-
-
