@@ -472,6 +472,29 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
     return fig
 
 
+
+def parse_pasted_sequence(text, name="Pasted Sequence"):
+    """Parse a raw sequence or FASTA string pasted by the user."""
+    if not text or not text.strip():
+        return None, name
+    text = text.strip()
+    # Try FASTA
+    if text.startswith(">"):
+        try:
+            record = SeqIO.read(io.StringIO(text), "fasta")
+            rec_name = record.id if record.id else name
+            seq = str(record.seq).upper()
+            seq = re.sub(r'[^ATCG]', '', seq)
+            if len(seq) > 100:
+                return seq, rec_name
+        except:
+            pass
+    # Raw sequence — strip whitespace/numbers/non-DNA chars
+    seq = re.sub(r'[^ATCGatcg]', '', text).upper()
+    if len(seq) > 100:
+        return seq, name
+    return None, name
+
 # ══════════════════════════════════════════════════════════════════════════════
 # TOOL 1 — RESTRICTION DIGEST PLANNER
 # ══════════════════════════════════════════════════════════════════════════════
@@ -488,7 +511,15 @@ if tool == "Restriction Digest Planner":
             help="Accepted formats: FASTA, GenBank, SeqBuilder Pro (.sbd)",
             key="uploader_1")
 
-        st.caption("💡 No file required — without an upload the tool runs in demo mode using a randomly generated 10 kb plasmid.")
+        pasted_seq_1 = st.text_area(
+            "— or paste sequence directly —",
+            placeholder="Paste raw DNA sequence or FASTA here…",
+            height=80,
+            key="paste_1",
+            help="Accepts raw sequence (ATCG) or FASTA format. Takes priority over file upload if both are provided."
+        )
+
+        st.caption("💡 No input required — without a sequence the tool runs in demo mode using a randomly generated 10 kb plasmid.")
 
         run = st.button("▶  Run Analysis", type="primary", use_container_width=True, key="run_1")
         prefer_short = st.checkbox(
@@ -521,7 +552,16 @@ if tool == "Restriction Digest Planner":
                 DEFAULT_ENZYMES, default=DEFAULT_ENZYMES[:10], key="enz_1")
 
     if run:
-        plasmid_seq, demo_modus, plasmid_name = load_sequence(uploaded_file)
+        # Pasted sequence takes priority over file upload
+        if pasted_seq_1 and pasted_seq_1.strip():
+            _seq, _name = parse_pasted_sequence(pasted_seq_1, "Pasted Sequence")
+            if _seq:
+                plasmid_seq, demo_modus, plasmid_name = _seq, False, _name
+            else:
+                st.error("❌ Could not parse pasted sequence. Please check the input.")
+                st.stop()
+        else:
+            plasmid_seq, demo_modus, plasmid_name = load_sequence(uploaded_file)
 
         if plasmid_seq is None:
             st.error("❌ Unable to read the uploaded file. Please verify the file format and try again.")
@@ -602,6 +642,17 @@ elif tool == "Multi-Plasmid Comparator":
             help="Upload at least 2 plasmids to compare",
             key="uploader_2")
 
+        st.caption("Optionally paste additional sequences below (one per box).")
+        pasted_seq_2a = st.text_area(
+            "Paste sequence A",
+            placeholder="Paste raw DNA or FASTA…",
+            height=68, key="paste_2a",
+            help="Name will be taken from FASTA header if present.")
+        pasted_seq_2b = st.text_area(
+            "Paste sequence B",
+            placeholder="Paste raw DNA or FASTA…",
+            height=68, key="paste_2b")
+
         run2 = st.button("▶  Run Comparison", type="primary", use_container_width=True, key="run_2")
 
         st.divider()
@@ -636,6 +687,14 @@ elif tool == "Multi-Plasmid Comparator":
             seq, demo, name = load_sequence(f)
             if seq:
                 plasmids.append({"seq": seq, "name": name, "size": len(seq)})
+        # Add pasted sequences
+        for raw_paste, default_name in [(pasted_seq_2a, "Sequence A"), (pasted_seq_2b, "Sequence B")]:
+            if raw_paste and raw_paste.strip():
+                seq, name = parse_pasted_sequence(raw_paste, default_name)
+                if seq:
+                    plasmids.append({"seq": seq, "name": name, "size": len(seq)})
+                else:
+                    st.warning(f"⚠️ Could not parse pasted {default_name} — skipped.")
 
         if len(plasmids) < 2:
             st.error("❌ Could not read at least 2 files. Please check the file formats.")
