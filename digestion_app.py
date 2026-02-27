@@ -53,7 +53,7 @@ div[data-testid="stSidebar"] div[data-testid="stButton"] button {
 """, unsafe_allow_html=True)
 
 st.sidebar.markdown(
-    '<div style="font-size:3rem;font-weight:800;color:#ffffff;margin-bottom:0.7rem;">'
+    '<div style="font-size:2.5rem;font-weight:800;color:#ffffff;margin-bottom:0.7rem;">'
     '🧬 Plasmid Analysis Toolkit</div>'
     '<div style="font-size:0.75rem;color:#a78bfa;font-weight:600;letter-spacing:0.08em;'
     'text-transform:uppercase;margin-bottom:0.75rem;">Select Analysis Module</div>',
@@ -1006,5 +1006,6 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
+
 
 
