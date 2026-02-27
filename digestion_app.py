@@ -8,17 +8,17 @@ import re
 import random
 import io
 
-# ── SEITENEINSTELLUNGEN ────────────────────────────────────────────────────────
+# ── PAGE SETTINGS ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Restriktionsverdau-Tool",
+    page_title="Restriction Digest Tool",
     page_icon="🧬",
     layout="wide"
 )
 
-st.title("🧬 Restriktionsverdau-Tool")
-st.markdown("Findet die besten Enzymkombinationen für diagnostische Verdaue.")
+st.title("🧬 Restriction Digest Tool")
+st.markdown("Finds the best enzyme combinations for diagnostic restriction digests.")
 
-# ── ENZYME ─────────────────────────────────────────────────────────────────────
+# ── ENZYMES ────────────────────────────────────────────────────────────────────
 DEFAULT_ENZYMES = [
     "EcoRI", "HindIII", "BamHI", "XbaI", "SalI", "PstI",
     "SphI", "KpnI", "SacI", "XhoI", "NcoI", "NheI",
@@ -30,7 +30,7 @@ DEFAULT_ENZYMES = [
     "BclI", "BssHII", "BstBI", "BstXI", "NarI", "BspHI",
 ]
 
-# ── SEQUENZ LADEN ──────────────────────────────────────────────────────────────
+# ── SEQUENCE LOADING ───────────────────────────────────────────────────────────
 def read_sbd(raw):
     try:
         text = raw.decode("latin-1")
@@ -54,7 +54,6 @@ def load_sequence(uploaded_file):
         if seq:
             return seq, False
 
-    # UTF-16 oder normales FASTA/GB
     for fmt in ["fasta", "genbank"]:
         try:
             record = SeqIO.read(io.StringIO(raw.decode("utf-8")), fmt)
@@ -67,7 +66,6 @@ def load_sequence(uploaded_file):
         except:
             pass
 
-    # Direkt DNA rausziehen als Fallback
     for enc in ["utf-8", "utf-16", "latin-1"]:
         try:
             text = raw.decode(enc)
@@ -79,7 +77,7 @@ def load_sequence(uploaded_file):
 
     return None, False
 
-# ── ANALYSE ────────────────────────────────────────────────────────────────────
+# ── ANALYSIS FUNCTIONS ─────────────────────────────────────────────────────────
 def get_fragments(plasmid_seq, enzymes, plasmid_size):
     rb = Restriction.RestrictionBatch(enzymes)
     cut_sites = []
@@ -145,7 +143,7 @@ def find_best_digests(plasmid_sequence, selected_enzymes,
             break
     return unique_results, cutting_enzymes
 
-# ── GEL ────────────────────────────────────────────────────────────────────────
+# ── GEL VISUALIZATION ──────────────────────────────────────────────────────────
 def draw_gel(results, plasmid_size, title_suffix=""):
     fig = go.Figure()
     marker_sizes = [10000, 8000, 6000, 5000, 4000, 3500, 3000,
@@ -218,7 +216,7 @@ def draw_gel(results, plasmid_size, title_suffix=""):
     fig.update_layout(
         paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
         title=dict(
-            text=f"Restriktionsverdau — Plasmid {plasmid_size} bp{title_suffix}",
+            text=f"Restriction Digest Simulation — Plasmid {plasmid_size} bp{title_suffix}",
             font=dict(color="white", size=14), x=0.5),
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
                    range=[-1.2, len(results) + 0.5]),
@@ -230,85 +228,85 @@ def draw_gel(results, plasmid_size, title_suffix=""):
 
 # ── SIDEBAR ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("⚙️ Parameter")
+    st.header("⚙️ Parameters")
 
     uploaded_file = st.file_uploader(
-        "Plasmid-Sequenz hochladen",
+        "Upload plasmid sequence",
         type=["fasta", "fa", "fas", "gb", "gbk", "genbank", "sbd"],
-        help="Unterstützte Formate: FASTA, GenBank, SeqBuilder (.sbd)")
+        help="Supported formats: FASTA, GenBank, SeqBuilder (.sbd)")
 
     st.divider()
 
-    min_frag = st.slider("Min Fragmentgröße (bp)", 100, 3000, 250, 50)
-    max_frag = st.slider("Max Fragmentgröße (bp)", 1000, 50000, 8000, 500)
-    min_frags = st.slider("Min Anzahl Banden", 1, 6, 3)
-    max_frags = st.slider("Max Anzahl Banden", 2, 10, 6)
-    min_diff = st.slider("Min Größenunterschied", 0.05, 0.5, 0.15, 0.05)
-    combo_min = st.slider("Min Enzyme pro Verdau", 1, 3, 1)
-    combo_max = st.slider("Max Enzyme pro Verdau", 1, 3, 2)
-    top_n = st.slider("Top N Ergebnisse", 1, 20, 10)
+    min_frag = st.slider("Min fragment size (bp)", 100, 3000, 250, 50)
+    max_frag = st.slider("Max fragment size (bp)", 1000, 50000, 8000, 500)
+    min_frags = st.slider("Min number of bands", 1, 6, 3)
+    max_frags = st.slider("Max number of bands", 2, 10, 6)
+    min_diff = st.slider("Min size difference", 0.05, 0.5, 0.15, 0.05)
+    combo_min = st.slider("Min enzymes per digest", 1, 3, 1)
+    combo_max = st.slider("Max enzymes per digest", 1, 3, 2)
+    top_n = st.slider("Top N results", 1, 20, 10)
 
     st.divider()
-    st.subheader("🧪 Enzyme auswählen")
-    select_all = st.checkbox("Alle auswählen", value=True)
+    st.subheader("🧪 Select enzymes")
+    select_all = st.checkbox("Select all", value=True)
     if select_all:
         selected_enzymes = DEFAULT_ENZYMES
     else:
         selected_enzymes = st.multiselect(
-            "Enzyme:", DEFAULT_ENZYMES, default=DEFAULT_ENZYMES[:10])
+            "Enzymes:", DEFAULT_ENZYMES, default=DEFAULT_ENZYMES[:10])
 
-    run = st.button("▶  Analyse starten", type="primary", use_container_width=True)
+    run = st.button("▶  Run Analysis", type="primary", use_container_width=True)
 
-# ── HAUPTBEREICH ───────────────────────────────────────────────────────────────
+# ── MAIN AREA ──────────────────────────────────────────────────────────────────
 if run:
     plasmid_seq, demo_modus = load_sequence(uploaded_file)
 
     if plasmid_seq is None:
-        st.error("❌ Datei konnte nicht gelesen werden!")
+        st.error("❌ Could not read file — please check the format!")
         st.stop()
 
     plasmid_size = len(plasmid_seq)
 
     if demo_modus:
-        st.warning("⚠️ Keine Datei hochgeladen — Demo-Modus mit zufälligem 10kb Plasmid")
+        st.warning("⚠️ No file uploaded — running in demo mode with random 10kb plasmid")
     else:
-        st.success(f"✅ Plasmid geladen: {plasmid_size} bp")
+        st.success(f"✅ Plasmid loaded: {plasmid_size} bp")
 
     for min_f in [3, 4]:
         st.divider()
-        st.subheader(f"Analyse — mindestens {min_f} Banden")
+        st.subheader(f"Analysis — minimum {min_f} bands")
 
-        with st.spinner(f"Suche Kombinationen mit min {min_f} Banden..."):
+        with st.spinner(f"Searching combinations with min {min_f} bands..."):
             best, cutting = find_best_digests(
                 plasmid_seq, selected_enzymes,
                 min_frag, max_frag, min_f, max_frags,
                 min_diff, (combo_min, combo_max), top_n)
 
-        st.caption(f"Enzyme die schneiden: {', '.join(e.__name__ for e in cutting)}")
+        st.caption(f"Enzymes that cut: {', '.join(e.__name__ for e in cutting)}")
 
         if not best:
-            st.error("Keine passenden Kombinationen gefunden — Parameter anpassen!")
+            st.error("No combinations found — try adjusting the parameters!")
         else:
-            # Tabelle
             import pandas as pd
             df = pd.DataFrame([{
                 "#": i+1,
-                "Enzyme": r["enzymes"],
-                "Fragmente (bp)": ",  ".join(str(f) for f in r["fragments"]),
-                "Anzahl Banden": r["n"]
+                "Enzymes": r["enzymes"],
+                "Fragments (bp)": ",  ".join(str(f) for f in r["fragments"]),
+                "Number of bands": r["n"]
             } for i, r in enumerate(best)])
             st.dataframe(df, use_container_width=True, hide_index=True)
 
-            # Gel
-            fig = draw_gel(best, plasmid_size, title_suffix=f" (min {min_f} Banden)")
+            fig = draw_gel(best, plasmid_size, title_suffix=f" (min {min_f} bands)")
             st.plotly_chart(fig, use_container_width=True)
 else:
-    st.info("👈 Parameter einstellen und **Analyse starten** klicken!")
+    st.info("👈 Set parameters and click **Run Analysis**!")
     st.markdown("""
-    **Unterstützte Dateiformate:**
+    **Supported file formats:**
     - `.fasta` / `.fa` / `.fas`
     - `.gb` / `.gbk` / `.genbank`
     - `.sbd` (SeqBuilder Pro)
 
-    **Ohne Datei** läuft das Tool im Demo-Modus mit einer zufälligen 10kb Sequenz.
+    **Without a file** the tool runs in demo mode with a random 10kb sequence.
+    
+    **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
