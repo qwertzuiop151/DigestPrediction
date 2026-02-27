@@ -170,7 +170,7 @@ def draw_gel(results, plasmid_size, title_suffix=""):
                           x0=lane_x - lane_width, x1=lane_x + lane_width,
                           y0=y - 0.008, y1=y + 0.008,
                           fillcolor="white", opacity=intensity, line=dict(width=0))
-            fig.add_shape(type="rect",
+        fig.add_shape(type="rect",
                           x0=lane_x - lane_width + 0.05, x1=lane_x + lane_width - 0.05,
                           y0=y - 0.002, y1=y + 0.002,
                           fillcolor="white", opacity=intensity * 0.3, line=dict(width=0))
@@ -313,6 +313,7 @@ else:
     
     **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
+
 
 
 
