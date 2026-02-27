@@ -29,15 +29,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── TOOL SELECTION ─────────────────────────────────────────────────────────────
+st.sidebar.markdown("""
+<div style="font-size: 1.1rem; font-weight: 800; color: #a78bfa; 
+     letter-spacing: 0.05em; margin-bottom: 0.3rem;">
+    🔬 SELECT TOOL
+</div>
+""", unsafe_allow_html=True)
+
 tool = st.sidebar.radio(
-    "🔬 Select Tool",
-    ["Restriction Digest Planner", "Multi-Plasmid Comparator"],
-    index=0
+    label="",
+    options=["Restriction Digest Planner", "Multi-Plasmid Comparator"],
+    index=0,
+    format_func=lambda x: f"🧪 {x}" if x == "Restriction Digest Planner" else f"🔀 {x}"
 )
 
 tool_descriptions = {
-    "Restriction Digest Planner": "🧪 **Restriction Digest Planner** — Upload a plasmid sequence and automatically find the best enzyme combinations for a diagnostic digest. Ranked by band separation quality and visualised as a predicted agarose gel.",
-    "Multi-Plasmid Comparator": "🔀 **Multi-Plasmid Comparator** — Upload 2 or more plasmids and identify which enzyme combinations produce distinct, distinguishable band patterns. Ideal for colony screening and construct verification.",
+    "Restriction Digest Planner": "Upload a plasmid sequence and automatically find the best enzyme combinations for a diagnostic digest. Ranked by band separation quality and visualised as a predicted agarose gel.",
+    "Multi-Plasmid Comparator": "Upload 2 or more plasmids and identify which enzyme combinations produce distinct, distinguishable band patterns. Ideal for colony screening and construct verification.",
 }
 
 st.sidebar.caption(tool_descriptions[tool])
