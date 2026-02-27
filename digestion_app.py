@@ -31,82 +31,51 @@ st.markdown("""
 # ── TOOL SELECTION ─────────────────────────────────────────────────────────────
 # ── Module selection via clickable cards ──────────────────────────────────────
 if "active_tool" not in st.session_state:
-    st.session_state.active_tool = "Restriction Digest Planner"
+    st.session_state.active_tool = None
 
-st.sidebar.markdown("""
-<div style="font-size: 0.65rem; font-weight: 700; color: #a78bfa;
-            letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 0.5rem;">
-    🧬 Plasmid Analysis Toolkit
-</div>
-<div style="font-size: 1.05rem; font-weight: 700; color: #ffffff; margin-bottom: 0.75rem;">
-    Select Analysis Module
-</div>
-""", unsafe_allow_html=True)
-
-# CSS: style the two buttons to look like cards
 st.sidebar.markdown("""
 <style>
-div[data-testid="stSidebar"] button[kind="secondary"] {
-    width: 100%;
+/* Card button base */
+div[data-testid="stSidebar"] div[data-testid="stButton"] button {
+    width: 100% !important;
     text-align: left !important;
-    border-radius: 8px !important;
-    padding: 0.6rem 0.85rem !important;
+    border-radius: 10px !important;
+    padding: 0.75rem 1rem !important;
     margin-bottom: 0.5rem !important;
-    font-size: 0.95rem !important;
-    font-weight: 600 !important;
-    background: rgba(255,255,255,0.04) !important;
-    border: 1px solid #444 !important;
-    color: #cccccc !important;
-    transition: all 0.15s ease;
-}
-div[data-testid="stSidebar"] button[kind="secondary"]:hover {
-    border-color: #7c3aed !important;
-    color: #ffffff !important;
-    background: rgba(124,58,237,0.12) !important;
+    font-size: 1.0rem !important;
+    font-weight: 700 !important;
+    line-height: 1.5 !important;
+    white-space: normal !important;
+    height: auto !important;
+    transition: all 0.15s ease !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-_tool1_active = st.session_state.active_tool == "Restriction Digest Planner"
-_tool2_active = st.session_state.active_tool == "Multi-Plasmid Comparator"
-
-def _card(title, description, active, color, bg):
-    border = color if active else "#444444"
-    background = bg if active else "rgba(255,255,255,0.03)"
-    glow = f"0 0 0 2px {color}44" if active else "none"
-    badge = f'<span style="font-size:0.65rem;font-weight:700;color:{color};background:{"rgba(124,58,237,0.2)" if active else "transparent"};border-radius:4px;padding:0.1rem 0.4rem;margin-left:0.4rem;vertical-align:middle;">{"● ACTIVE" if active else ""}</span>'
-    return f"""
-    <div style="
-        background: {background};
-        border: 1.5px solid {border};
-        border-radius: 10px;
-        padding: 0.75rem 0.9rem;
-        margin-bottom: 0.55rem;
-        box-shadow: {glow};
-        transition: all 0.2s ease;
-    ">
-        <div style="font-size:1.0rem;font-weight:800;color:#ffffff;">{title}{badge}</div>
-        <div style="font-size:0.77rem;color:{"#c4b5fd" if active else "#888888"};margin-top:0.25rem;line-height:1.45;">{description}</div>
-    </div>
-    """
-
 st.sidebar.markdown(
-    _card("🧪 Restriction Digest Planner",
-          "Identify optimal enzyme combinations for a single plasmid. Ranked by predicted gel separation quality.",
-          _tool1_active, "#7c3aed", "rgba(124,58,237,0.13)"),
+    '<div style="font-size:0.65rem;font-weight:700;color:#a78bfa;letter-spacing:0.14em;'
+    'text-transform:uppercase;margin-bottom:0.6rem;">🧬 Plasmid Analysis Toolkit — Select Module</div>',
     unsafe_allow_html=True)
-if st.sidebar.button("Select — Restriction Digest Planner", key="btn_tool1",
-                     type="secondary", use_container_width=True):
+
+_t1 = st.session_state.active_tool == "Restriction Digest Planner"
+_t2_check = st.session_state.active_tool
+_t2 = st.session_state.active_tool == "Multi-Plasmid Comparator"
+
+if st.sidebar.button(
+    f"{'✅' if _t1 else '🧪'}  Restriction Digest Planner\n"
+    "Optimal enzyme combinations for a single plasmid, ranked by gel separation quality.",
+    key="btn_tool1",
+    type="primary" if _t1 else "secondary",
+    use_container_width=True):
     st.session_state.active_tool = "Restriction Digest Planner"
     st.rerun()
 
-st.sidebar.markdown(
-    _card("🔀 Multi-Plasmid Comparator",
-          "Compare digest patterns across multiple constructs. Identifies discriminating enzyme combinations.",
-          _tool2_active, "#10b981", "rgba(16,185,129,0.1)"),
-    unsafe_allow_html=True)
-if st.sidebar.button("Select — Multi-Plasmid Comparator", key="btn_tool2",
-                     type="secondary", use_container_width=True):
+if st.sidebar.button(
+    f"{'✅' if _t2 else '🔀'}  Multi-Plasmid Comparator\n"
+    "Discriminating enzyme combinations across multiple constructs.",
+    key="btn_tool2",
+    type="primary" if _t2 else "secondary",
+    use_container_width=True):
     st.session_state.active_tool = "Multi-Plasmid Comparator"
     st.rerun()
 
@@ -536,9 +505,90 @@ def parse_pasted_sequence(text, name="Pasted Sequence"):
     return None, name
 
 # ══════════════════════════════════════════════════════════════════════════════
+# OVERVIEW — shown when no module is selected
+# ══════════════════════════════════════════════════════════════════════════════
+if tool is None:
+    st.markdown("""
+    <div style="text-align:center; padding: 2rem 0 1rem 0;">
+        <div style="font-size:0.8rem;font-weight:700;color:#a78bfa;letter-spacing:0.14em;text-transform:uppercase;">
+            🧬 Plasmid Analysis Toolkit
+        </div>
+        <div style="font-size:2.2rem;font-weight:800;color:#ffffff;margin-top:0.4rem;">
+            Select an Analysis Module
+        </div>
+        <div style="font-size:1.05rem;color:#888888;margin-top:0.5rem;">
+            Choose a module from the sidebar to get started.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns(2, gap="large")
+
+    with col1:
+        st.markdown("""
+        <div style="
+            background: linear-gradient(135deg, rgba(124,58,237,0.15), rgba(124,58,237,0.05));
+            border: 1.5px solid #7c3aed;
+            border-radius: 14px;
+            padding: 2rem;
+            height: 100%;
+        ">
+            <div style="font-size:2.5rem;margin-bottom:0.75rem;">🧪</div>
+            <div style="font-size:1.3rem;font-weight:800;color:#ffffff;margin-bottom:0.75rem;">
+                Restriction Digest Planner
+            </div>
+            <div style="font-size:0.9rem;color:#c4b5fd;line-height:1.6;">
+                Upload or paste a single plasmid sequence and automatically identify 
+                the optimal enzyme combinations for a diagnostic digest.<br><br>
+                Results are ranked by predicted gel separation quality and 
+                visualised as a simulated agarose gel.
+            </div>
+            <div style="margin-top:1.5rem;">
+                <div style="font-size:0.75rem;font-weight:700;color:#a78bfa;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">Accepts</div>
+                <div style="font-size:0.85rem;color:#888;">FASTA · GenBank · SeqBuilder (.sbd) · Pasted sequence</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
+        if st.button("Open Restriction Digest Planner →", use_container_width=True, type="primary", key="ov_btn1"):
+            st.session_state.active_tool = "Restriction Digest Planner"
+            st.rerun()
+
+    with col2:
+        st.markdown("""
+        <div style="
+            background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05));
+            border: 1.5px solid #10b981;
+            border-radius: 14px;
+            padding: 2rem;
+            height: 100%;
+        ">
+            <div style="font-size:2.5rem;margin-bottom:0.75rem;">🔀</div>
+            <div style="font-size:1.3rem;font-weight:800;color:#ffffff;margin-bottom:0.75rem;">
+                Multi-Plasmid Comparator
+            </div>
+            <div style="font-size:0.9rem;color:#6ee7b7;line-height:1.6;">
+                Upload or paste two or more plasmid sequences and identify 
+                enzyme combinations that produce distinct, discriminating 
+                band patterns.<br><br>
+                Ideal for colony screening and verification of multiple 
+                constructs in parallel.
+            </div>
+            <div style="margin-top:1.5rem;">
+                <div style="font-size:0.75rem;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">Accepts</div>
+                <div style="font-size:0.85rem;color:#888;">FASTA · GenBank · SeqBuilder (.sbd) · Pasted sequences A–H</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
+        if st.button("Open Multi-Plasmid Comparator →", use_container_width=True, type="primary", key="ov_btn2"):
+            st.session_state.active_tool = "Multi-Plasmid Comparator"
+            st.rerun()
+
+# ══════════════════════════════════════════════════════════════════════════════
 # TOOL 1 — RESTRICTION DIGEST PLANNER
 # ══════════════════════════════════════════════════════════════════════════════
-if tool == "Restriction Digest Planner":
+elif tool == "Restriction Digest Planner":
     st.markdown("### 🧪 Restriction Digest Planner")
     st.markdown("Automatically identifies optimal enzyme combinations for diagnostic restriction analysis of circular plasmids.")
 
