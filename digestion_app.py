@@ -1304,18 +1304,20 @@ elif tool == "Feature Annotation Viewer":
 
     # Wong (2011) colorblind-safe palette — optimised for red-green colour vision deficiency
     FEATURE_COLORS = {
-        "CDS":          "#0072B2",  # blue
-        "gene":         "#E69F00",  # orange
-        "promoter":     "#F0E442",  # yellow
-        "terminator":   "#56B4E9",  # sky blue
-        "rep_origin":   "#009E73",  # bluish green (distinguishable from red)
-        "primer_bind":  "#CC79A7",  # reddish purple
-        "misc_feature": "#D55E00",  # vermillion
-        "regulatory":   "#0096FF",  # bright blue
-        "LTR":          "#F5C542",  # golden yellow
-        "RBS":          "#56B4E9",  # sky blue
-        "sig_peptide":  "#CC79A7",  # reddish purple
-        "mat_peptide":  "#009E73",  # bluish green
+        "CDS":              "#0072B2",  # blue
+        "gene":             "#E69F00",  # orange
+        "promoter":         "#F0E442",  # yellow
+        "terminator":       "#56B4E9",  # sky blue
+        "rep_origin":       "#009E73",  # bluish green
+        "primer_bind_fwd":  "#FFE500",  # bright yellow — forward primers
+        "primer_bind_rev":  "#FF2D2D",  # bright red — reverse primers
+        "primer_bind":      "#FFE500",  # fallback (no strand info)
+        "misc_feature":     "#D55E00",  # vermillion
+        "regulatory":       "#0096FF",  # bright blue
+        "LTR":              "#F5C542",  # golden yellow
+        "RBS":              "#56B4E9",  # sky blue
+        "sig_peptide":      "#CC79A7",  # reddish purple
+        "mat_peptide":      "#009E73",  # bluish green
     }
     DEFAULT_COLOR = "#aaaaaa"
 
@@ -1331,15 +1333,25 @@ elif tool == "Feature Annotation Viewer":
         r"fwd|rev|forward|reverse|^F_|^R_|_F$|_R$|_fwd|_rev",
         re.IGNORECASE)
 
-    def is_primer(feat):
-        """Return True if feature looks like a primer by type or name."""
+    def primer_type_key(feat):
+        """Return strand-aware primer type key, or None if not a primer."""
+        is_p = False
         if feat.type == "primer_bind":
-            return True
-        if feat.type in ("misc_feature", "misc_binding"):
-            lbl = get_label(feat)
-            if PRIMER_KEYWORDS.search(lbl):
-                return True
-        return False
+            is_p = True
+        elif feat.type in ("misc_feature", "misc_binding"):
+            if PRIMER_KEYWORDS.search(get_label(feat)):
+                is_p = True
+        if not is_p:
+            return None
+        strand = feat.location.strand
+        if strand == 1:
+            return "primer_bind_fwd"
+        elif strand == -1:
+            return "primer_bind_rev"
+        return "primer_bind"  # unknown strand
+
+    def is_primer(feat):
+        return primer_type_key(feat) is not None
 
     def draw_annotation_map(record, show_labels=True, zoom_start=None, zoom_end=None):
         plasmid_size = len(record.seq)
@@ -1375,8 +1387,9 @@ elif tool == "Feature Annotation Viewer":
         for feat in record.features:
             if feat.type in ("source",):
                 continue
-            # Detect primers by type or name before color lookup
-            display_type = "primer_bind" if is_primer(feat) else feat.type
+            # Detect primers by type/name; use strand-aware key for color
+            _pk = primer_type_key(feat)
+            display_type = _pk if _pk else feat.type
             color = FEATURE_COLORS.get(display_type, DEFAULT_COLOR)
             start  = int(feat.location.start) + 1
             end    = int(feat.location.end)
@@ -1601,7 +1614,7 @@ elif tool == "Feature Annotation Viewer":
             if f.type == "source":
                 continue
             feat_rows.append({
-                "Type": "primer_bind" if is_primer(f) else f.type,
+                "Type": (primer_type_key(f) or f.type),
                 "Label": get_label(f),
                 "Start": int(f.location.start) + 1,
                 "End": int(f.location.end),
