@@ -149,7 +149,7 @@ def draw_gel(results, plasmid_size, title_suffix=""):
     marker_sizes = [10000, 8000, 6000, 5000, 4000, 3500, 3000,
                     2500, 2000, 1500, 1000, 750, 500, 250]
     marker_sizes = [m for m in marker_sizes if m <= plasmid_size * 1.5]
-    thick_bands = {10000, 3000, 1000}
+    thick_bands = {6000, 3000, 1000}
     y_min = np.log10(200)
     y_max = np.log10(plasmid_size * 1.5)
 
@@ -323,5 +323,6 @@ else:
 
     **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
+
 
 
