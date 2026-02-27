@@ -629,7 +629,7 @@ elif tool == "Multi-Plasmid Comparator":
         st.subheader("🔧 Analysis Settings")
         min_frag2 = st.slider("Minimum fragment size (bp)", 100, 3000, 250, 50, key="mf2")
         max_frag2 = st.slider("Maximum fragment size (bp)", 1000, 50000, 8000, 500, key="xf2")
-        min_frags2 = st.slider("Minimum number of bands (n)", 1, 8, 3, key="mfr2")
+        min_frags2 = st.slider("Minimum number of bands (n)", 1, 8, 1, key="mfr2")
         max_frags2 = st.slider("Maximum number of bands", 2, 10, 6, key="xfr2")
         min_diff2 = st.slider("Minimum relative size difference", 0.05, 0.5, 0.15, 0.05, key="md2")
         combo_max2 = st.slider("Maximum enzymes per digest", 1, 3, 2,
@@ -869,3 +869,4 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
+
