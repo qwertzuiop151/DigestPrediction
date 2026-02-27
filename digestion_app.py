@@ -29,68 +29,88 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── TOOL SELECTION ─────────────────────────────────────────────────────────────
+# ── Module selection via clickable cards ──────────────────────────────────────
+if "active_tool" not in st.session_state:
+    st.session_state.active_tool = "Restriction Digest Planner"
+
 st.sidebar.markdown("""
-<div style="
-    background: linear-gradient(135deg, #1e1e3f 0%, #2d1b69 100%);
-    border: 1px solid #7c3aed;
-    border-radius: 10px;
-    padding: 1rem 1.1rem 0.8rem 1.1rem;
-    margin-bottom: 1rem;
-">
-    <div style="font-size: 0.65rem; font-weight: 700; color: #a78bfa;
-                letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 0.4rem;">
-        🧬 Plasmid Analysis Toolkit
-    </div>
-    <div style="font-size: 1.05rem; font-weight: 700; color: #ffffff; margin-bottom: 1rem;">
-        Select Analysis Module
-    </div>
-    <div style="
-        background: rgba(124, 58, 237, 0.15);
-        border: 1px solid #7c3aed;
-        border-radius: 8px;
-        padding: 0.65rem 0.85rem;
-        margin-bottom: 0.5rem;
-        cursor: pointer;
-    ">
-        <div style="font-size: 1.0rem; font-weight: 700; color: #ffffff;">🧪 Restriction Digest Planner</div>
-        <div style="font-size: 0.78rem; color: #c4b5fd; margin-top: 0.2rem; line-height: 1.4;">
-            Identify optimal enzyme combinations for a single plasmid.
-            Ranked by predicted gel separation quality.
-        </div>
-    </div>
-    <div style="
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid #10b981;
-        border-radius: 8px;
-        padding: 0.65rem 0.85rem;
-    ">
-        <div style="font-size: 1.0rem; font-weight: 700; color: #ffffff;">🔀 Multi-Plasmid Comparator</div>
-        <div style="font-size: 0.78rem; color: #6ee7b7; margin-top: 0.2rem; line-height: 1.4;">
-            Compare digest patterns across multiple constructs.
-            Finds enzymes that discriminate between plasmids.
-        </div>
-    </div>
+<div style="font-size: 0.65rem; font-weight: 700; color: #a78bfa;
+            letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 0.5rem;">
+    🧬 Plasmid Analysis Toolkit
+</div>
+<div style="font-size: 1.05rem; font-weight: 700; color: #ffffff; margin-bottom: 0.75rem;">
+    Select Analysis Module
 </div>
 """, unsafe_allow_html=True)
 
-tool = st.sidebar.radio(
-    label="Active module:",
-    options=["Restriction Digest Planner", "Multi-Plasmid Comparator"],
-    index=0,
-    format_func=lambda x: (
-        "🧪  Restriction Digest Planner" if x == "Restriction Digest Planner"
-        else "🔀  Multi-Plasmid Comparator"
-    )
-)
-
-st.sidebar.markdown("""<style>
-div[role="radiogroup"] label {
-    font-size: 1.05rem !important;
+# CSS: style the two buttons to look like cards
+st.sidebar.markdown("""
+<style>
+div[data-testid="stSidebar"] button[kind="secondary"] {
+    width: 100%;
+    text-align: left !important;
+    border-radius: 8px !important;
+    padding: 0.6rem 0.85rem !important;
+    margin-bottom: 0.5rem !important;
+    font-size: 0.95rem !important;
     font-weight: 600 !important;
-    padding: 0.35rem 0 !important;
+    background: rgba(255,255,255,0.04) !important;
+    border: 1px solid #444 !important;
+    color: #cccccc !important;
+    transition: all 0.15s ease;
 }
-</style>""", unsafe_allow_html=True)
+div[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    border-color: #7c3aed !important;
+    color: #ffffff !important;
+    background: rgba(124,58,237,0.12) !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
+_tool1_active = st.session_state.active_tool == "Restriction Digest Planner"
+_tool2_active = st.session_state.active_tool == "Multi-Plasmid Comparator"
+
+def _card(title, description, active, color, bg):
+    border = color if active else "#444444"
+    background = bg if active else "rgba(255,255,255,0.03)"
+    glow = f"0 0 0 2px {color}44" if active else "none"
+    badge = f'<span style="font-size:0.65rem;font-weight:700;color:{color};background:{"rgba(124,58,237,0.2)" if active else "transparent"};border-radius:4px;padding:0.1rem 0.4rem;margin-left:0.4rem;vertical-align:middle;">{"● ACTIVE" if active else ""}</span>'
+    return f"""
+    <div style="
+        background: {background};
+        border: 1.5px solid {border};
+        border-radius: 10px;
+        padding: 0.75rem 0.9rem;
+        margin-bottom: 0.55rem;
+        box-shadow: {glow};
+        transition: all 0.2s ease;
+    ">
+        <div style="font-size:1.0rem;font-weight:800;color:#ffffff;">{title}{badge}</div>
+        <div style="font-size:0.77rem;color:{"#c4b5fd" if active else "#888888"};margin-top:0.25rem;line-height:1.45;">{description}</div>
+    </div>
+    """
+
+st.sidebar.markdown(
+    _card("🧪 Restriction Digest Planner",
+          "Identify optimal enzyme combinations for a single plasmid. Ranked by predicted gel separation quality.",
+          _tool1_active, "#7c3aed", "rgba(124,58,237,0.13)"),
+    unsafe_allow_html=True)
+if st.sidebar.button("Select — Restriction Digest Planner", key="btn_tool1",
+                     type="secondary", use_container_width=True):
+    st.session_state.active_tool = "Restriction Digest Planner"
+    st.rerun()
+
+st.sidebar.markdown(
+    _card("🔀 Multi-Plasmid Comparator",
+          "Compare digest patterns across multiple constructs. Identifies discriminating enzyme combinations.",
+          _tool2_active, "#10b981", "rgba(16,185,129,0.1)"),
+    unsafe_allow_html=True)
+if st.sidebar.button("Select — Multi-Plasmid Comparator", key="btn_tool2",
+                     type="secondary", use_container_width=True):
+    st.session_state.active_tool = "Multi-Plasmid Comparator"
+    st.rerun()
+
+tool = st.session_state.active_tool
 st.sidebar.divider()
 
 # ── ENZYMES ────────────────────────────────────────────────────────────────────
