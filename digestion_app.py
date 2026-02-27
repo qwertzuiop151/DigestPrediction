@@ -356,21 +356,13 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
                 y=np.concatenate([y_outer, y_inner]),
                 fill="toself", fillcolor=seg_color,
                 line=dict(width=0), mode="lines",
-                hoverinfo="skip", showlegend=False, opacity=0.6))
-
-            mid_angle = (a0 + a1) / 2
-            fig.add_trace(go.Scatter(
-                x=[0.90 * np.cos(mid_angle)],
-                y=[0.90 * np.sin(mid_angle)],
-                mode="markers",
-                marker=dict(size=14, color=seg_color, opacity=0.01),
                 hovertemplate=(
                     f"<b>Fragment {idx+1}</b><br>"
                     f"Size: <b>{frag_size} bp</b><br>"
                     f"From: {start} bp → {all_cuts[(idx+1) % n_cuts]} bp"
                     "<extra></extra>"),
-                showlegend=False))
-
+                hoveron="fills",
+                showlegend=False, opacity=0.6))
     # Cut site markers and labels
     for enz_idx, (enz_name, sites) in enumerate(cutting.items()):
         color = enz_colors[enz_idx % len(enz_colors)]
@@ -828,6 +820,7 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
+
 
 
 
