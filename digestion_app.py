@@ -160,6 +160,7 @@ def draw_gel(results, plasmid_size, title_suffix=""):
     colors = ["#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3",
               "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#ff6b6b", "#4ecdc4"]
 
+    # ── Marker ──
     max_marker = max(marker_sizes)
     for size in marker_sizes:
         y = bp_to_y(size)
@@ -167,13 +168,13 @@ def draw_gel(results, plasmid_size, title_suffix=""):
         height = 0.008 if is_thick else 0.006
         intensity = 0.2 + 0.75 * (size / max_marker)
         fig.add_shape(type="rect",
-                          x0=lane_x - lane_width, x1=lane_x + lane_width,
-                          y0=y - 0.008, y1=y + 0.008,
-                          fillcolor="white", opacity=intensity, line=dict(width=0))
+                      x0=-lane_width, x1=lane_width,
+                      y0=y - height, y1=y + height,
+                      fillcolor="white", opacity=intensity, line=dict(width=0))
         fig.add_shape(type="rect",
-                          x0=lane_x - lane_width + 0.05, x1=lane_x + lane_width - 0.05,
-                          y0=y - 0.002, y1=y + 0.002,
-                          fillcolor="white", opacity=intensity * 0.3, line=dict(width=0))
+                      x0=-lane_width + 0.05, x1=lane_width - 0.05,
+                      y0=y - 0.002, y1=y + 0.002,
+                      fillcolor="white", opacity=intensity * 0.2, line=dict(width=0))
         fig.add_annotation(x=-lane_width - 0.05, y=y,
                            text=f"<b>{size} bp</b>" if is_thick else f"{size} bp",
                            showarrow=False,
@@ -186,6 +187,7 @@ def draw_gel(results, plasmid_size, title_suffix=""):
                        font=dict(color="white", size=11, family="Arial Black"),
                        xanchor="center", yanchor="bottom")
 
+    # ── Sample lanes ──
     for i, result in enumerate(results):
         lane_x = i + 1
         color = colors[i % len(colors)]
@@ -201,11 +203,11 @@ def draw_gel(results, plasmid_size, title_suffix=""):
             intensity = 0.2 + 0.75 * (frag / max_frag)
             fig.add_shape(type="rect",
                           x0=lane_x - lane_width, x1=lane_x + lane_width,
-                          y0=y - 0.012, y1=y + 0.012,
+                          y0=y - 0.008, y1=y + 0.008,
                           fillcolor="white", opacity=intensity, line=dict(width=0))
             fig.add_shape(type="rect",
                           x0=lane_x - lane_width + 0.05, x1=lane_x + lane_width - 0.05,
-                          y0=y - 0.003, y1=y + 0.003,
+                          y0=y - 0.002, y1=y + 0.002,
                           fillcolor="white", opacity=intensity * 0.3, line=dict(width=0))
             fig.add_trace(go.Scatter(
                 x=[lane_x], y=[y], mode="markers",
@@ -244,7 +246,7 @@ with st.sidebar:
 
     min_frag = st.slider("Min fragment size (bp)", 100, 3000, 250, 50)
     max_frag = st.slider("Max fragment size (bp)", 1000, 50000, 8000, 500)
-    min_frags = st.slider("Min number of bands", 1, 8, 3)
+    min_frags = st.number_input("Starting minimum bands (n)", min_value=1, max_value=8, value=3, step=1)
     max_frags = st.slider("Max number of bands", 2, 10, 6)
     min_diff = st.slider("Min size difference", 0.05, 0.5, 0.15, 0.05)
     combo_min = st.slider("Min enzymes per digest", 1, 3, 1)
@@ -310,11 +312,6 @@ else:
     - `.sbd` (SeqBuilder Pro)
 
     **Without a file** the tool runs in demo mode with a random 10kb sequence.
-    
+
     **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
-
-
-
-
-
