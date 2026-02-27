@@ -1400,13 +1400,27 @@ elif tool == "Feature Annotation Viewer":
 
             a0 = pos_to_angle(start)
             a1 = pos_to_angle(end)
-            if a1 >= a0:
-                a1 -= 2 * np.pi
 
-            # For very short features, extend the arc to at least 3° so it's visible
+            if end < start:
+                # Wrap-around feature (e.g. 9800..200): goes clockwise past origin
+                size_bp = (plasmid_size - start) + end
+                if a1 > a0:
+                    a1 -= 2 * np.pi
+            elif end == start:
+                # Point feature (SNP, single base): force minimal visible arc
+                a1 = a0 - np.radians(3)
+            else:
+                # Normal feature: a1 should be < a0 (clockwise)
+                if a1 >= a0:
+                    a1 -= 2 * np.pi
+
+            # Hard cap: never draw more than one full circle
+            if abs(a1 - a0) >= 2 * np.pi:
+                a1 = a0 - (2 * np.pi - 0.01)
+
+            # Minimum visible arc: 3° for very short features
             min_arc = np.radians(3)
             if abs(a1 - a0) < min_arc:
-                # Extend symmetrically around midpoint
                 mid_a_ext = (a0 + a1) / 2
                 a0 = mid_a_ext + min_arc / 2
                 a1 = mid_a_ext - min_arc / 2
