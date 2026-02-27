@@ -53,31 +53,34 @@ div[data-testid="stSidebar"] div[data-testid="stButton"] button {
 """, unsafe_allow_html=True)
 
 st.sidebar.markdown(
-    '<div style="font-size:2.5rem;font-weight:800;color:#ffffff;margin-bottom:0.7rem;">'
-    '🧬 Plasmid Analysis Toolkit</div>'
-    '<div style="font-size:0.75rem;color:#a78bfa;font-weight:600;letter-spacing:0.08em;'
-    'text-transform:uppercase;margin-bottom:0.75rem;">Select Analysis Module</div>',
+    '<div style="font-size:2.5rem;font-weight:800;color:#ffffff;margin-bottom:0.2rem;line-height:1.1;">'
+    '🧬</div>'
+    '<div style="font-size:1.1rem;font-weight:800;color:#ffffff;margin-bottom:0.2rem;">'
+    'Plasmid Analysis Toolkit</div>'
+    '<div style="font-size:0.72rem;color:#a78bfa;font-weight:600;letter-spacing:0.1em;'
+    'text-transform:uppercase;margin-bottom:1rem;">Select Analysis Module</div>',
     unsafe_allow_html=True)
 
 _t1 = st.session_state.active_tool == "Restriction Digest Planner"
-_t2_check = st.session_state.active_tool
 _t2 = st.session_state.active_tool == "Multi-Plasmid Comparator"
 
 if st.sidebar.button(
-    f"{'✅' if _t1 else '🧪'}  Restriction Digest Planner\n"
-    "Optimal enzyme combinations for a single plasmid, ranked by gel separation quality.",
+    ("✅ Restriction Digest Planner  ●  ACTIVE" if _t1
+     else "🧪 Restriction Digest Planner"),
     key="btn_tool1",
     type="primary" if _t1 else "secondary",
-    use_container_width=True):
+    use_container_width=True,
+    help="Identify optimal enzyme combinations for a single plasmid"):
     st.session_state.active_tool = "Restriction Digest Planner"
     st.rerun()
 
 if st.sidebar.button(
-    f"{'✅' if _t2 else '🔀'}  Multi-Plasmid Comparator\n"
-    "Discriminating enzyme combinations across multiple constructs.",
+    ("✅ Multi-Plasmid Comparator  ●  ACTIVE" if _t2
+     else "🔀 Multi-Plasmid Comparator"),
     key="btn_tool2",
     type="primary" if _t2 else "secondary",
-    use_container_width=True):
+    use_container_width=True,
+    help="Compare digest patterns and identify discriminating enzymes across constructs"):
     st.session_state.active_tool = "Multi-Plasmid Comparator"
     st.rerun()
 
@@ -1006,6 +1009,3 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
-
-
-
