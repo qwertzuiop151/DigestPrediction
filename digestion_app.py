@@ -294,6 +294,9 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
                        font=dict(color="white", size=12, family="Arial Black"),
                        xanchor="center", yanchor="bottom")
 
+    # Global max fragment for consistent band intensity across all lanes
+    global_max_frag = max(f for r in results for f in r["fragments"])
+
     for i, result in enumerate(results):
         lane_x = i + 1
         color = colors[i % len(colors)]
@@ -317,10 +320,9 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
             borderwidth=1.5,
             borderpad=5)
 
-        max_frag = max(result["fragments"])
         for frag in result["fragments"]:
             y = bp_to_y(frag)
-            intensity = 0.2 + 0.75 * (frag / max_frag)
+            intensity = 0.2 + 0.75 * (frag / global_max_frag)
             fig.add_shape(type="rect",
                           x0=lane_x - lane_width, x1=lane_x + lane_width,
                           y0=y - band_height, y1=y + band_height,
