@@ -461,13 +461,14 @@ if tool == "Restriction Digest Planner":
                                title_suffix=f" — {plasmid_name} — min {min_f} bands")
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Plasmid map for top result
+              # Plasmid map for top result
                 with st.expander("🗺️ Show plasmid restriction map for top result"):
                     top_enzymes = best[0]["enzyme_list"]
                     fig_map = draw_plasmid_map(
                         plasmid_seq, plasmid_size, plasmid_name, top_enzymes)
                     if fig_map:
-                        st.plotly_chart(fig_map, use_container_width=False)
+                        st.plotly_chart(fig_map, use_container_width=False,
+                                        key=f"map_t1_{min_f}")
                     else:
                         st.write("No cut sites to display.")
     else:
@@ -665,7 +666,7 @@ elif tool == "Multi-Plasmid Comparator":
                                lane_labels=lane_labels)
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Plasmid map per plasmid for this combo
+               # Plasmid map per plasmid for this combo
                 with st.expander(f"🗺️ Show restriction maps for this digest combination"):
                     map_cols = st.columns(len(plasmids))
                     for j, p in enumerate(plasmids):
@@ -674,7 +675,8 @@ elif tool == "Multi-Plasmid Comparator":
                             fig_map = draw_plasmid_map(
                                 p["seq"], p["size"], p["name"], combo["enzyme_list"])
                             if fig_map:
-                                st.plotly_chart(fig_map, use_container_width=True)
+                                st.plotly_chart(fig_map, use_container_width=True,
+                                                key=f"map_t2_{i}_{j}")
                             else:
                                 st.write("No cut sites.")
     else:
@@ -687,3 +689,4 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
+
