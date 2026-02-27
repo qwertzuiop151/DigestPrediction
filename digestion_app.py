@@ -290,12 +290,6 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
 
 # ── PLASMID MAP ────────────────────────────────────────────────────────────────
 def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
-    """
-    Plasmid map with:
-    - Position 0 at top (12 o'clock), clockwise direction
-    - Hoverable arc segments showing fragment sizes
-    - Cut site markers and enzyme labels
-    """
     resolved = [getattr(Restriction, e) for e in enzyme_list if hasattr(Restriction, e)]
     if not resolved:
         return None
@@ -310,189 +304,130 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
     enz_colors = ["#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3",
                   "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#ff6b6b", "#4ecdc4"]
 
-    # Helper: plasmid position → angle (0 bp = top = -π/2, clockwise)
+    # Position 1 = top (12 o'clock), clockwise
+    # Plotly sin/cos: angle=0 → right, positive = counter-clockwise
+    # So we negate to get clockwise, and start at +π/2 (top)
     def pos_to_angle(pos):
-        return 2 * np.pi * (pos - 1) / plasmid_size - np.pi / 2    
+        return np.pi / 2 - 2 * np.pi * (pos - 1) / plasmid_size
 
-
-    # ── Draw plasmid backbone ──
-    theta = np.linspace(0, 2 * np.pi, 500)
+    # Backbone: clockwise from top
+    theta = np.linspace(np.pi / 2, np.pi / 2 - 2 * np.pi, 500)
     fig.add_trace(go.Scatter(
         x=np.cos(theta), y=np.sin(theta),
         mode="lines",
         line=dict(color="#555577", width=12),
         hoverinfo="skip", showlegend=False))
 
-    # ── Collect ALL cut positions sorted, compute fragments ──
+    # Collect all cut positions, compute arc segments
     all_cuts = sorted(set(
         site for sites in cutting.values() for site in sites
     ))
 
     if all_cuts:
-        # Compute arc segments between consecutive cut sites (circular)
-        segments = []
         n_cuts = len(all_cuts)
-        for i in range(n_cuts):
-            start = all_cuts[i]
-            end = all_cuts[(i + 1) % n_cuts]
-            frag_size = end - start if end > start else plasmid_size - start + end
-            segments.append((start, end, frag_size))
-
-        # Draw hoverable arc segments
         seg_colors = [
             "#3a3a6a", "#2a4a3a", "#4a3a2a", "#3a2a4a",
             "#2a3a4a", "#4a2a3a", "#3a4a2a", "#4a4a2a",
         ]
-        for idx, (start, end, frag_size) in enumerate(segments):
+        for idx in range(n_cuts):
+            start = all_cuts[idx]
+            end = all_cuts[(idx + 1) % n_cuts]
+            frag_size = end - start if end > start else plasmid_size - start + end
+
             a0 = pos_to_angle(start)
             a1 = pos_to_angle(end)
 
-            # Sweep clockwise: if a1 < a0, add 2π
-            if a1 <= a0:
-                a1 += 2 * np.pi
+            # Clockwise: a1 should be < a0; if not, subtract 2π
+            if a1 >= a0:
+                a1 -= 2 * np.pi
 
-            n_pts = max(30, int((a1 - a0) / (2 * np.pi) * 300) + 2)
+            n_pts = max(30, int(abs(a1 - a0) / (2 * np.pi) * 300) + 2)
             arc_angles = np.linspace(a0, a1, n_pts)
 
-            r_inner = 0.80
-            r_outer = 1.00
-
-            # Build filled arc shape (outer arc + inner arc reversed)
+            r_inner, r_outer = 0.80, 1.00
             x_outer = r_outer * np.cos(arc_angles)
             y_outer = r_outer * np.sin(arc_angles)
             x_inner = r_inner * np.cos(arc_angles[::-1])
             y_inner = r_inner * np.sin(arc_angles[::-1])
 
-            x_fill = np.concatenate([x_outer, x_inner])
-            y_fill = np.concatenate([y_outer, y_inner])
-
             seg_color = seg_colors[idx % len(seg_colors)]
+            fig.add_trace(go.Scatter(
+                x=np.concatenate([x_outer, x_inner]),
+                y=np.concatenate([y_outer, y_inner]),
+                fill="toself", fillcolor=seg_color,
+                line=dict(width=0), mode="lines",
+                hoverinfo="skip", showlegend=False, opacity=0.6))
 
-            # Midpoint for hover
             mid_angle = (a0 + a1) / 2
-            mid_r = 0.90
-
             fig.add_trace(go.Scatter(
-                x=x_fill, y=y_fill,
-                fill="toself",
-                fillcolor=seg_color,
-                line=dict(width=0),
-                mode="lines",
-                hoverinfo="skip",
-                showlegend=False,
-                opacity=0.6
-            ))
-
-            # Invisible hover point at arc midpoint
-            fig.add_trace(go.Scatter(
-                x=[mid_r * np.cos(mid_angle)],
-                y=[mid_r * np.sin(mid_angle)],
+                x=[0.90 * np.cos(mid_angle)],
+                y=[0.90 * np.sin(mid_angle)],
                 mode="markers",
                 marker=dict(size=14, color=seg_color, opacity=0.01),
                 hovertemplate=(
                     f"<b>Fragment {idx+1}</b><br>"
                     f"Size: <b>{frag_size} bp</b><br>"
                     f"From: {start} bp → {all_cuts[(idx+1) % n_cuts]} bp"
-                    "<extra></extra>"
-                ),
-                showlegend=False
-            ))
+                    "<extra></extra>"),
+                showlegend=False))
 
-    # ── Draw cut site markers & labels ──
+    # Cut site markers and labels
     for enz_idx, (enz_name, sites) in enumerate(cutting.items()):
         color = enz_colors[enz_idx % len(enz_colors)]
         for site in sites:
             angle = pos_to_angle(site)
-
-            # Tick mark (radial line through backbone)
-            x0 = 0.76 * np.cos(angle)
-            y0 = 0.76 * np.sin(angle)
-            x1 = 1.04 * np.cos(angle)
-            y1 = 1.04 * np.sin(angle)
             fig.add_shape(type="line",
-                          x0=x0, y0=y0, x1=x1, y1=y1,
+                          x0=0.76 * np.cos(angle), y0=0.76 * np.sin(angle),
+                          x1=1.04 * np.cos(angle), y1=1.04 * np.sin(angle),
                           line=dict(color=color, width=2.5))
-
-            # Invisible hover marker on tick
             fig.add_trace(go.Scatter(
-                x=[0.90 * np.cos(angle)],
-                y=[0.90 * np.sin(angle)],
-                mode="markers",
-                marker=dict(size=8, color=color, opacity=0),
+                x=[0.90 * np.cos(angle)], y=[0.90 * np.sin(angle)],
+                mode="markers", marker=dict(size=8, color=color, opacity=0),
                 hovertemplate=(
                     f"<b>{enz_name}</b><br>"
                     f"Position: {site} bp<br>"
                     f"({site/plasmid_size*100:.1f}% of plasmid)"
-                    "<extra></extra>"
-                ),
-                showlegend=False
-            ))
-
-            # Label outside circle
-            label_r = 1.22
+                    "<extra></extra>"),
+                showlegend=False))
             fig.add_annotation(
-                x=label_r * np.cos(angle),
-                y=label_r * np.sin(angle),
-                text=(
-                    f"<b>{enz_name}</b><br>"
-                    f"<span style='font-size:9px;color:#aaa'>{site} bp</span>"
-                ),
-                showarrow=False,
-                font=dict(color=color, size=10),
-                xanchor="center", yanchor="middle"
-            )
+                x=1.22 * np.cos(angle), y=1.22 * np.sin(angle),
+                text=f"<b>{enz_name}</b><br><span style='font-size:9px;color:#aaa'>{site} bp</span>",
+                showarrow=False, font=dict(color=color, size=10),
+                xanchor="center", yanchor="middle")
 
-        # Legend entry
         fig.add_trace(go.Scatter(
-            x=[None], y=[None],
-            mode="markers",
+            x=[None], y=[None], mode="markers",
             marker=dict(size=10, color=color, symbol="square"),
-            name=f"{enz_name} ({len(sites)}×)",
-            showlegend=True
-        ))
+            name=f"{enz_name} ({len(sites)}×)", showlegend=True))
 
-    # ── Position 0 marker (top) ──
-    fig.add_annotation(
-        x=0, y=1.10,
-        text="<b>1</b>",
-        showarrow=False,
-        font=dict(color="#ffffff", size=11),
-        xanchor="center", yanchor="bottom"
-    )
-    fig.add_shape(type="line",
-                  x0=0, y0=0.96, x1=0, y1=1.06,
+    # Position 1 marker at top
+    fig.add_annotation(x=0, y=1.10, text="<b>1</b>",
+                       showarrow=False, font=dict(color="#ffffff", size=11),
+                       xanchor="center", yanchor="bottom")
+    fig.add_shape(type="line", x0=0, y0=0.96, x1=0, y1=1.06,
                   line=dict(color="#ffffff", width=1.5, dash="dot"))
 
-    # ── Center labels ──
+    # Center labels
     fig.add_annotation(x=0, y=0.12, text=f"<b>{plasmid_name}</b>",
                        showarrow=False,
                        font=dict(color="white", size=13, family="Arial Black"),
                        xanchor="center")
     fig.add_annotation(x=0, y=-0.12, text=f"{plasmid_size:,} bp",
-                       showarrow=False,
-                       font=dict(color="#aaaaaa", size=11),
+                       showarrow=False, font=dict(color="#aaaaaa", size=11),
                        xanchor="center")
 
     fig.update_layout(
-        paper_bgcolor="#1a1a2e",
-        plot_bgcolor="#1a1a2e",
-        title=dict(
-            text=f"Restriction Site Map — {plasmid_name}",
-            font=dict(color="white", size=14, family="Arial Black"),
-            x=0.5),
-        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
-                   range=[-2.0, 2.0]),
+        paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
+        title=dict(text=f"Restriction Site Map — {plasmid_name}",
+                   font=dict(color="white", size=14, family="Arial Black"), x=0.5),
+        xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[-2.0, 2.0]),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
                    range=[-2.0, 2.0], scaleanchor="x"),
-        height=580, width=580,
-        showlegend=True,
+        height=580, width=580, showlegend=True,
         legend=dict(font=dict(color="white", size=10),
                     bgcolor="#2a2a4a", bordercolor="#555", borderwidth=1),
-        margin=dict(t=60, b=20, l=20, r=20),
-        hovermode="closest"
-    )
+        margin=dict(t=60, b=20, l=20, r=20), hovermode="closest")
     return fig
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TOOL 1 — RESTRICTION DIGEST PLANNER
@@ -893,6 +828,7 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
+
 
 
 
