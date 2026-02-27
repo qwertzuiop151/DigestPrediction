@@ -10,7 +10,7 @@ import io
 import pandas as pd
 from scipy.optimize import linear_sum_assignment
 
-# ── PAGE SETTINGS ──────────────────────────────────────────────────────────────
+# PAGE SETTINGS
 st.set_page_config(
     page_title="Plasmid Analysis Toolkit",
     page_icon="🧬",
@@ -28,8 +28,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── TOOL SELECTION ─────────────────────────────────────────────────────────────
-# ── Module selection via clickable cards ──────────────────────────────────────
+# MODULE SELECTION
+# Module selection
 if "active_tool" not in st.session_state:
     st.session_state.active_tool = None
 
@@ -87,7 +87,7 @@ if st.sidebar.button(
 tool = st.session_state.active_tool
 st.sidebar.divider()
 
-# ── ENZYMES ────────────────────────────────────────────────────────────────────
+# ENZYMES
 DEFAULT_ENZYMES = [
     "EcoRI", "HindIII", "BamHI", "XbaI", "SalI", "PstI",
     "SphI", "KpnI", "SacI", "XhoI", "NcoI", "NheI",
@@ -99,7 +99,7 @@ DEFAULT_ENZYMES = [
     "BclI", "BssHII", "BstBI", "BstXI", "NarI", "BspHI",
 ]
 
-# ── SEQUENCE LOADING ───────────────────────────────────────────────────────────
+# SEQUENCE LOADING
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 def read_sbd(raw, display_name="file"):
@@ -130,7 +130,7 @@ def load_sequence(uploaded_file):
     name = uploaded_file.name.lower()
     display_name = uploaded_file.name.rsplit(".", 1)[0]
 
-    # ── File size check (5 MB max) ──
+    # File size check (5 MB max)
     if len(raw) > MAX_FILE_SIZE_BYTES:
         st.error(f"❌ **{uploaded_file.name}** is too large "
                  f"({len(raw)/1024/1024:.1f} MB). Maximum allowed size is 5 MB. "
@@ -168,7 +168,7 @@ def load_sequence(uploaded_file):
 
     return None, False, display_name
 
-# ── ANALYSIS FUNCTIONS ─────────────────────────────────────────────────────────
+# ANALYSIS FUNCTIONS
 @st.cache_data(show_spinner=False)
 def get_fragments(plasmid_seq, enzyme_names, plasmid_size):
     if not isinstance(plasmid_seq, Seq):
@@ -201,7 +201,7 @@ def score_combination(fragments, min_frag, max_frag, min_frags, max_frags, min_d
         ratio = (fragments[i+1] - fragments[i]) / fragments[i+1]
         if ratio < min_diff:
             return None
-    # Log-space CV: reflects visual band spacing on gel
+    # Log-space CV — reflects visual band spacing on gel
     log_frags = np.log10(fragments)
     return np.std(log_frags) / np.mean(log_frags)
 
@@ -248,7 +248,7 @@ def find_best_digests(plasmid_sequence, selected_enzymes,
             break
     return unique_results, cutting_enzymes
 
-# ── GEL VISUALIZATION ──────────────────────────────────────────────────────────
+# GEL VISUALIZATION
 def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
     fig = go.Figure()
     marker_sizes = [10000, 8000, 6000, 5000, 4000, 3500, 3000,
@@ -346,7 +346,7 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
         paper_bgcolor="#1a1a2e",
         plot_bgcolor="#1a1a2e",
         title=dict(
-            text=f"Predicted Restriction Digest Pattern — {plasmid_size} bp plasmid{title_suffix}",
+            text=f"Predicted Restriction Digest Pattern  |  {plasmid_size} bp{title_suffix}",
             font=dict(color="white", size=15, family="Arial Black"),
             x=0.5),
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
@@ -359,7 +359,7 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
         hovermode="closest")
     return fig
 
-# ── PLASMID MAP ────────────────────────────────────────────────────────────────
+# PLASMID MAP
 def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
     resolved = [getattr(Restriction, e) for e in enzyme_list if hasattr(Restriction, e)]
     if not resolved:
@@ -476,7 +476,7 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
 
     fig.update_layout(
         paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
-        title=dict(text=f"Restriction Site Map — {plasmid_name}",
+        title=dict(text=f"Restriction Site Map  |  {plasmid_name}",
                    font=dict(color="white", size=14, family="Arial Black"), x=0.5),
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[-2.0, 2.0]),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
@@ -511,9 +511,7 @@ def parse_pasted_sequence(text, name="Pasted Sequence"):
         return seq, name
     return None, name
 
-# ══════════════════════════════════════════════════════════════════════════════
-# OVERVIEW — shown when no module is selected
-# ══════════════════════════════════════════════════════════════════════════════
+# OVERVIEW
 if tool is None:
     st.markdown("""
     <div style="text-align:center; padding: 2rem 0 1rem 0;">
@@ -592,9 +590,7 @@ if tool is None:
             st.session_state.active_tool = "Multi-Plasmid Comparator"
             st.rerun()
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TOOL 1 — RESTRICTION DIGEST PLANNER
-# ══════════════════════════════════════════════════════════════════════════════
+# TOOL 1: RESTRICTION DIGEST PLANNER
 elif tool == "Restriction Digest Planner":
     st.markdown("### 🧪 Restriction Digest Planner")
     st.markdown("Automatically identifies optimal enzyme combinations for diagnostic restriction analysis of circular plasmids.")
@@ -609,7 +605,7 @@ elif tool == "Restriction Digest Planner":
             key="uploader_1")
 
         pasted_seq_1 = st.text_area(
-            "— or paste sequence directly —",
+            "Or paste sequence directly",
             placeholder="Paste raw DNA sequence or FASTA here…",
             height=80,
             key="paste_1",
@@ -698,7 +694,7 @@ elif tool == "Restriction Digest Planner":
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
                 fig = draw_gel(best, plasmid_size,
-                               title_suffix=f" — {plasmid_name} — min {min_f} bands")
+                               title_suffix=f" · {plasmid_name} · min {min_f} bands")
                 st.plotly_chart(fig, use_container_width=True)
 
                 with st.expander("🗺️ Show plasmid restriction map for top result"):
@@ -722,9 +718,7 @@ elif tool == "Restriction Digest Planner":
         **Tip:** Limit to max 2 enzymes per digest for faster results.
         """)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# TOOL 2 — MULTI-PLASMID COMPARATOR
-# ══════════════════════════════════════════════════════════════════════════════
+# TOOL 2: MULTI-PLASMID COMPARATOR
 elif tool == "Multi-Plasmid Comparator":
     st.markdown("### 🔀 Multi-Plasmid Comparator")
     st.markdown("Compare restriction digest patterns across multiple plasmids — identifies enzymes that discriminate between constructs.")
@@ -909,7 +903,7 @@ elif tool == "Multi-Plasmid Comparator":
                 if not valid:
                     continue
 
-                # Gel-physical discrimination score: log-space Hungarian matching
+                # Discrimination score: log-space optimal fragment matching
                 diff_score = 0
                 for i in range(len(frag_sets)):
                     for j in range(i+1, len(frag_sets)):
@@ -985,7 +979,7 @@ elif tool == "Multi-Plasmid Comparator":
                     lane_labels.append(f"<b>{p['name']}</b>")
 
                 fig = draw_gel(gel_results, max_size,
-                               title_suffix=f" — {combo['enzymes']}",
+                               title_suffix=f" · {combo['enzymes']}",
                                lane_labels=lane_labels)
                 st.plotly_chart(fig, use_container_width=True)
 
