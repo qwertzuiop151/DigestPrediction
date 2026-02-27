@@ -255,17 +255,17 @@ with st.sidebar:
 
     st.divider()
     st.subheader("🔧 Analysis Settings")
-
+    prefer_short = st.checkbox(
+        "Prioritise short fragments",
+        value=False,
+        help="Ranks results by smallest largest fragment — minimises gel run time")
     min_frag = st.slider("Minimum fragment size (bp)", 100, 3000, 250, 50)
     max_frag = st.slider("Maximum fragment size (bp)", 1000, 50000, 8000, 500)
     min_frags = st.slider("Minimum number of bands (n)", 1, 8, 3,
                           help="Results will be shown for n and n+1 bands")
     max_frags = st.slider("Maximum number of bands", 2, 10, 6)
     min_diff = st.slider("Minimum relative size difference between bands", 0.05, 0.5, 0.15, 0.05)
-    prefer_short = st.checkbox(
-        "Prioritise short fragments",
-        value=False,
-        help="Ranks results by smallest largest fragment — minimises gel run time")
+    
     combo_min = st.slider("Minimum enzymes per digest", 1, 3, 1)
     combo_max = st.slider("Maximum enzymes per digest", 1, 3, 2,
                           help="Increasing to 3 significantly increases computation time")
@@ -343,3 +343,4 @@ else:
     - Use *Prioritise short fragments* if gel run time is a concern
     - Results are shown for n and n+1 minimum bands simultaneously for easy comparison
     """)
+
