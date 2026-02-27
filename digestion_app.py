@@ -1511,26 +1511,41 @@ elif tool == "Feature Annotation Viewer":
                      f"Strand: {'(+) forward' if strand == 1 else '(-) reverse'}<br>"
                      f"Size: {size_bp:,} bp")
 
-            # Feature arc body
-            fig.add_trace(go.Scatter(
-                x=np.concatenate([x_out, x_in]),
-                y=np.concatenate([y_out, y_in]),
-                fill="toself", fillcolor=color,
-                line=dict(width=0, color=color), mode="lines",
-                text=hover, hoverinfo="text", hoveron="fills",
-                showlegend=display_type not in seen_types,
-                name=display_type,
-                legendgroup=display_type,
-                opacity=0.88))
-            seen_types[display_type] = True
+            if is_primer_feat:
+                # Primers: single thick line, no fill, no arrow
+                r_line = (r_outer + r_inner) / 2
+                fig.add_trace(go.Scatter(
+                    x=r_line * np.cos(arc),
+                    y=r_line * np.sin(arc),
+                    mode="lines",
+                    line=dict(width=4, color=color),
+                    text=hover, hoverinfo="text",
+                    showlegend=display_type not in seen_types,
+                    name=display_type,
+                    legendgroup=display_type,
+                    opacity=1.0))
+                seen_types[display_type] = True
+            else:
+                # Feature arc body
+                fig.add_trace(go.Scatter(
+                    x=np.concatenate([x_out, x_in]),
+                    y=np.concatenate([y_out, y_in]),
+                    fill="toself", fillcolor=color,
+                    line=dict(width=0, color=color), mode="lines",
+                    text=hover, hoverinfo="text", hoveron="fills",
+                    showlegend=display_type not in seen_types,
+                    name=display_type,
+                    legendgroup=display_type,
+                    opacity=0.88))
+                seen_types[display_type] = True
 
-            # Arrow head
-            fig.add_trace(go.Scatter(
-                x=arrow_x, y=arrow_y,
-                fill="toself", fillcolor=color,
-                line=dict(width=0), mode="lines",
-                hoverinfo="skip", showlegend=False,
-                legendgroup=feat.type, opacity=1.0))
+                # Arrow head
+                fig.add_trace(go.Scatter(
+                    x=arrow_x, y=arrow_y,
+                    fill="toself", fillcolor=color,
+                    line=dict(width=0), mode="lines",
+                    hoverinfo="skip", showlegend=False,
+                    legendgroup=display_type, opacity=1.0))
 
             # Label — only if show_labels=True and feature is large enough to warrant one
             if show_labels:
