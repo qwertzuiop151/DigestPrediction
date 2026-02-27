@@ -118,7 +118,7 @@ def read_sbd(raw, display_name="file"):
                        "If this seems wrong, try exporting as FASTA from SeqBuilder.")
         return seq
     except Exception as e:
-        st.warning(f"⚠️ **{display_name}.sbd**: Failed to parse — {e}")
+        st.warning(f"⚠️ **{display_name}.sbd**: Parse error: {e}")
         return None
 
 def load_sequence(uploaded_file):
@@ -189,7 +189,7 @@ def get_fragments(plasmid_seq, enzyme_names, plasmid_size):
     return sorted(fragments)
 
 def score_combination(fragments, min_frag, max_frag, min_frags, max_frags, min_diff):
-    """Score how evenly bands are distributed — in log space (gel-physical)."""
+    """Score how evenly bands are distributed across the gel (log space)."""
     n = len(fragments)
     if n < min_frags or n > max_frags:
         return None
@@ -201,7 +201,7 @@ def score_combination(fragments, min_frag, max_frag, min_frags, max_frags, min_d
         ratio = (fragments[i+1] - fragments[i]) / fragments[i+1]
         if ratio < min_diff:
             return None
-    # Log-space CV — reflects visual band spacing on gel
+    # Log-space CV: reflects visual band spacing on gel
     log_frags = np.log10(fragments)
     return np.std(log_frags) / np.mean(log_frags)
 
@@ -335,7 +335,7 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
                 x=[lane_x], y=[y], mode="markers",
                 marker=dict(size=20, color="white", opacity=0),
                 hovertemplate=(
-                    f"<b>{top_label} — {result['enzymes']}</b><br>"
+                    f"<b>{top_label} | {result['enzymes']}</b><br>"
                     f"Fragment: {frag} bp<br>"
                     f"Total bands: {result['n']}"
                     "<extra></extra>"),
@@ -505,7 +505,7 @@ def parse_pasted_sequence(text, name="Pasted Sequence"):
                 return seq, rec_name
         except:
             pass
-    # Raw sequence — strip whitespace/numbers/non-DNA chars
+    # Raw sequence: strip whitespace, numbers, non-DNA chars
     seq = re.sub(r'[^ATCGatcg]', '', text).upper()
     if len(seq) > 100:
         return seq, name
@@ -612,13 +612,13 @@ elif tool == "Restriction Digest Planner":
             help="Accepts raw sequence (ATCG) or FASTA format. Takes priority over file upload if both are provided."
         )
 
-        st.caption("💡 No input required — without a sequence the tool runs in demo mode using a randomly generated 10 kb plasmid.")
+        st.caption("💡 No input required. Without a sequence the tool runs in demo mode with a randomly generated 10 kb plasmid.")
 
         run = st.button("▶  Run Analysis", type="primary", use_container_width=True, key="run_1")
         prefer_short = st.checkbox(
             "Prioritise short fragments",
             value=False,
-            help="Ranks results by smallest largest fragment — minimises total gel run time")
+            help="Ranks results by smallest largest fragment, minimising total gel run time.")
 
         st.divider()
         st.subheader("🔧 Analysis Settings")
@@ -663,13 +663,13 @@ elif tool == "Restriction Digest Planner":
         plasmid_size = len(plasmid_seq)
 
         if demo_modus:
-            st.warning("⚠️ No sequence file uploaded — running in demo mode with a randomly generated 10 kb plasmid.")
+            st.warning("⚠️ No sequence uploaded. Running in demo mode with a randomly generated 10 kb plasmid.")
         else:
-            st.success(f"✅ **{plasmid_name}** loaded successfully — {plasmid_size} bp")
+            st.success(f"✅ {plasmid_name} loaded ({plasmid_size} bp)")
 
         for min_f in [min_frags, min_frags + 1]:
             st.divider()
-            st.subheader(f"Results — minimum {min_f} bands")
+            st.subheader(f"Results: minimum {min_f} bands")
 
             with st.spinner(f"Searching for optimal enzyme combinations yielding at least {min_f} bands..."):
                 best, cutting = find_best_digests(
@@ -721,7 +721,7 @@ elif tool == "Restriction Digest Planner":
 # TOOL 2: MULTI-PLASMID COMPARATOR
 elif tool == "Multi-Plasmid Comparator":
     st.markdown("### 🔀 Multi-Plasmid Comparator")
-    st.markdown("Compare restriction digest patterns across multiple plasmids — identifies enzymes that discriminate between constructs.")
+    st.markdown("Compare restriction digest patterns across multiple plasmids to identify discriminating enzyme combinations.")
 
     with st.sidebar:
         st.header("⚙️ Parameters")
@@ -790,7 +790,7 @@ elif tool == "Multi-Plasmid Comparator":
                 if seq:
                     plasmids.append({"seq": seq, "name": name, "size": len(seq)})
                 else:
-                    st.warning(f"⚠️ Could not parse pasted {default_name} — skipped.")
+                    st.warning(f"⚠️ Could not parse pasted {default_name}. Skipped.")
 
         if len(plasmids) < 2:
             st.error("❌ Could not read at least 2 files. Please check the file formats.")
@@ -949,7 +949,7 @@ elif tool == "Multi-Plasmid Comparator":
             )
             if discriminating:
                 st.info(
-                    f"Discriminating enzymes found: **{', '.join(sorted(discriminating))}** — "
+                    f"Discriminating enzymes found: **{', '.join(sorted(discriminating))}**. "
                     "but their fragments don't meet the current size/band-count filters. "
                     "Try adjusting the Analysis Settings in the sidebar."
                 )
@@ -963,11 +963,11 @@ elif tool == "Multi-Plasmid Comparator":
                 rows.append(row)
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-            st.subheader("🧫 Predicted Gel — All Plasmids per Combination")
+            st.subheader("🧫 Predicted Gel: All Plasmids per Combination")
             max_size = max(p["size"] for p in plasmids)
 
             for i, combo in enumerate(top_combos[:5]):
-                st.markdown(f"**#{i+1} — {combo['enzymes']}** (discrimination score: {combo['diff_score']:.3f})")
+                st.markdown(f"**#{i+1}  {combo['enzymes']}**  (score: {combo['diff_score']:.3f})")
                 gel_results = []
                 lane_labels = []
                 for j, p in enumerate(plasmids):
