@@ -287,6 +287,12 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
 
 # ── PLASMID MAP ────────────────────────────────────────────────────────────────
 def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
+    """
+    Plasmid map with:
+    - Position 0 at top (12 o'clock), clockwise direction
+    - Hoverable arc segments showing fragment sizes
+    - Cut site markers and enzyme labels
+    """
     resolved = [getattr(Restriction, e) for e in enzyme_list if hasattr(Restriction, e)]
     if not resolved:
         return None
@@ -297,56 +303,168 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
         return None
 
     fig = go.Figure()
-    colors = ["#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3",
-              "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#ff6b6b", "#4ecdc4"]
 
-    # Plasmid circle
-    theta = np.linspace(0, 2 * np.pi, 300)
+    enz_colors = ["#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3",
+                  "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#ff6b6b", "#4ecdc4"]
+
+    # Helper: plasmid position → angle (0 bp = top = -π/2, clockwise)
+    def pos_to_angle(pos):
+        return 2 * np.pi * pos / plasmid_size - np.pi / 2
+
+    # ── Draw plasmid backbone ──
+    theta = np.linspace(0, 2 * np.pi, 500)
     fig.add_trace(go.Scatter(
         x=np.cos(theta), y=np.sin(theta),
         mode="lines",
-        line=dict(color="#aaaaaa", width=10),
+        line=dict(color="#555577", width=12),
         hoverinfo="skip", showlegend=False))
 
-    # Cut sites
-    for idx, (enz_name, sites) in enumerate(cutting.items()):
-        color = colors[idx % len(colors)]
-        for site in sites:
-            angle = 2 * np.pi * site / plasmid_size - np.pi / 2
-            x0, y0 = 0.82 * np.cos(angle), 0.82 * np.sin(angle)
-            x1, y1 = 1.18 * np.cos(angle), 1.18 * np.sin(angle)
+    # ── Collect ALL cut positions sorted, compute fragments ──
+    all_cuts = sorted(set(
+        site for sites in cutting.values() for site in sites
+    ))
+
+    if all_cuts:
+        # Compute arc segments between consecutive cut sites (circular)
+        segments = []
+        n_cuts = len(all_cuts)
+        for i in range(n_cuts):
+            start = all_cuts[i]
+            end = all_cuts[(i + 1) % n_cuts]
+            frag_size = end - start if end > start else plasmid_size - start + end
+            segments.append((start, end, frag_size))
+
+        # Draw hoverable arc segments
+        seg_colors = [
+            "#3a3a6a", "#2a4a3a", "#4a3a2a", "#3a2a4a",
+            "#2a3a4a", "#4a2a3a", "#3a4a2a", "#4a4a2a",
+        ]
+        for idx, (start, end, frag_size) in enumerate(segments):
+            a0 = pos_to_angle(start)
+            a1 = pos_to_angle(end)
+
+            # Sweep clockwise: if a1 < a0, add 2π
+            if a1 <= a0:
+                a1 += 2 * np.pi
+
+            n_pts = max(30, int((a1 - a0) / (2 * np.pi) * 300) + 2)
+            arc_angles = np.linspace(a0, a1, n_pts)
+
+            r_inner = 0.80
+            r_outer = 1.00
+
+            # Build filled arc shape (outer arc + inner arc reversed)
+            x_outer = r_outer * np.cos(arc_angles)
+            y_outer = r_outer * np.sin(arc_angles)
+            x_inner = r_inner * np.cos(arc_angles[::-1])
+            y_inner = r_inner * np.sin(arc_angles[::-1])
+
+            x_fill = np.concatenate([x_outer, x_inner])
+            y_fill = np.concatenate([y_outer, y_inner])
+
+            seg_color = seg_colors[idx % len(seg_colors)]
+
+            # Midpoint for hover
+            mid_angle = (a0 + a1) / 2
+            mid_r = 0.90
+
             fig.add_trace(go.Scatter(
-                x=[x0, x1], y=[y0, y1],
+                x=x_fill, y=y_fill,
+                fill="toself",
+                fillcolor=seg_color,
+                line=dict(width=0),
                 mode="lines",
-                line=dict(color=color, width=3),
-                hoverinfo="skip", showlegend=False))
+                hoverinfo="skip",
+                showlegend=False,
+                opacity=0.6
+            ))
 
-            label_r = 1.35
+            # Invisible hover point at arc midpoint
             fig.add_trace(go.Scatter(
-                x=[label_r * np.cos(angle)],
-                y=[label_r * np.sin(angle)],
+                x=[mid_r * np.cos(mid_angle)],
+                y=[mid_r * np.sin(mid_angle)],
                 mode="markers",
-                marker=dict(size=10, color=color, opacity=0),
-                hovertemplate=f"<b>{enz_name}</b><br>Position: {site} bp<extra></extra>",
-                showlegend=True,
-                name=f"{enz_name} ({len(sites)}x)"))
+                marker=dict(size=14, color=seg_color, opacity=0.01),
+                hovertemplate=(
+                    f"<b>Fragment {idx+1}</b><br>"
+                    f"Size: <b>{frag_size} bp</b><br>"
+                    f"From: {start} bp → {all_cuts[(idx+1) % n_cuts]} bp"
+                    "<extra></extra>"
+                ),
+                showlegend=False
+            ))
 
-            # Enzyme name label
-            label_r2 = 1.5
+    # ── Draw cut site markers & labels ──
+    for enz_idx, (enz_name, sites) in enumerate(cutting.items()):
+        color = enz_colors[enz_idx % len(enz_colors)]
+        for site in sites:
+            angle = pos_to_angle(site)
+
+            # Tick mark (radial line through backbone)
+            x0 = 0.76 * np.cos(angle)
+            y0 = 0.76 * np.sin(angle)
+            x1 = 1.04 * np.cos(angle)
+            y1 = 1.04 * np.sin(angle)
+            fig.add_shape(type="line",
+                          x0=x0, y0=y0, x1=x1, y1=y1,
+                          line=dict(color=color, width=2.5))
+
+            # Invisible hover marker on tick
+            fig.add_trace(go.Scatter(
+                x=[0.90 * np.cos(angle)],
+                y=[0.90 * np.sin(angle)],
+                mode="markers",
+                marker=dict(size=8, color=color, opacity=0),
+                hovertemplate=(
+                    f"<b>{enz_name}</b><br>"
+                    f"Position: {site} bp<br>"
+                    f"({site/plasmid_size*100:.1f}% of plasmid)"
+                    "<extra></extra>"
+                ),
+                showlegend=False
+            ))
+
+            # Label outside circle
+            label_r = 1.22
             fig.add_annotation(
-                x=label_r2 * np.cos(angle),
-                y=label_r2 * np.sin(angle),
-                text=f"<b>{enz_name}</b><br><span style='font-size:9px'>{site} bp</span>",
+                x=label_r * np.cos(angle),
+                y=label_r * np.sin(angle),
+                text=(
+                    f"<b>{enz_name}</b><br>"
+                    f"<span style='font-size:9px;color:#aaa'>{site} bp</span>"
+                ),
                 showarrow=False,
                 font=dict(color=color, size=10),
-                xanchor="center", yanchor="middle")
+                xanchor="center", yanchor="middle"
+            )
 
-    # Center labels
+        # Legend entry
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None],
+            mode="markers",
+            marker=dict(size=10, color=color, symbol="square"),
+            name=f"{enz_name} ({len(sites)}×)",
+            showlegend=True
+        ))
+
+    # ── Position 0 marker (top) ──
+    fig.add_annotation(
+        x=0, y=1.10,
+        text="<b>1</b>",
+        showarrow=False,
+        font=dict(color="#ffffff", size=11),
+        xanchor="center", yanchor="bottom"
+    )
+    fig.add_shape(type="line",
+                  x0=0, y0=0.96, x1=0, y1=1.06,
+                  line=dict(color="#ffffff", width=1.5, dash="dot"))
+
+    # ── Center labels ──
     fig.add_annotation(x=0, y=0.12, text=f"<b>{plasmid_name}</b>",
                        showarrow=False,
                        font=dict(color="white", size=13, family="Arial Black"),
                        xanchor="center")
-    fig.add_annotation(x=0, y=-0.12, text=f"{plasmid_size} bp",
+    fig.add_annotation(x=0, y=-0.12, text=f"{plasmid_size:,} bp",
                        showarrow=False,
                        font=dict(color="#aaaaaa", size=11),
                        xanchor="center")
@@ -359,15 +477,18 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
             font=dict(color="white", size=14, family="Arial Black"),
             x=0.5),
         xaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
-                   range=[-2.1, 2.1]),
+                   range=[-2.0, 2.0]),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
-                   range=[-2.1, 2.1], scaleanchor="x"),
-        height=550, width=550,
+                   range=[-2.0, 2.0], scaleanchor="x"),
+        height=580, width=580,
         showlegend=True,
         legend=dict(font=dict(color="white", size=10),
                     bgcolor="#2a2a4a", bordercolor="#555", borderwidth=1),
-        margin=dict(t=60, b=20, l=20, r=20))
+        margin=dict(t=60, b=20, l=20, r=20),
+        hovermode="closest"
+    )
     return fig
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TOOL 1 — RESTRICTION DIGEST PLANNER
@@ -552,25 +673,54 @@ elif tool == "Multi-Plasmid Comparator":
         for d in cut_data.values():
             all_cutting.update(d.keys())
 
+        # ── FIX: Discriminating = cuts differently in any plasmid
+        # (different count OR present in some but not all)
         discriminating = []
-        universal = []
+        universal_same = []   # cuts same number of times in all plasmids
+        universal_diff = []   # cuts in all plasmids but different number of times
+
         for enz in all_cutting:
-            cuts_in = [p["name"] for p in plasmids if enz in cut_data[p["name"]]]
-            if len(cuts_in) == len(plasmids):
-                universal.append(enz)
-            else:
+            counts = []
+            for p in plasmids:
+                if enz in cut_data[p["name"]]:
+                    counts.append(len(cut_data[p["name"]][enz]))
+                else:
+                    counts.append(0)
+
+            cuts_in_all = all(c > 0 for c in counts)
+            all_same_count = len(set(counts)) == 1
+
+            if not cuts_in_all:
+                # Absent in at least one plasmid → strongly discriminating
                 discriminating.append(enz)
+            elif not all_same_count:
+                # Present in all but different number of cuts → also discriminating
+                discriminating.append(enz)
+            else:
+                universal_same.append(enz)
 
         st.divider()
         st.subheader("🔍 Enzyme Overview")
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.markdown("**✅ Cut in ALL plasmids (universal)**")
-            st.write(", ".join(sorted(universal)) if universal else "None")
+            st.markdown("**✅ Identical in ALL plasmids**")
+            st.write(", ".join(sorted(universal_same)) if universal_same else "None")
         with col2:
-            st.markdown("**⚡ Discriminating enzymes (cut in some but not all)**")
-            st.write(", ".join(sorted(discriminating)) if discriminating else
-                     "None — all plasmids have identical cut patterns")
+            st.markdown("**⚡ Discriminating (absent in some)**")
+            absent_disc = [e for e in discriminating
+                           if not all(e in cut_data[p["name"]] for p in plasmids)]
+            st.write(", ".join(sorted(absent_disc)) if absent_disc else "None")
+        with col3:
+            st.markdown("**🔢 Discriminating (different cut count)**")
+            count_disc = [e for e in discriminating
+                          if all(e in cut_data[p["name"]] for p in plasmids)]
+            st.write(", ".join(sorted(count_disc)) if count_disc else "None")
+
+        # Summary line
+        if not discriminating:
+            st.info("All enzymes produce identical patterns across all plasmids.")
+        else:
+            st.success(f"Found **{len(discriminating)} discriminating enzyme(s)** that produce different patterns.")
 
         st.divider()
         st.subheader("📊 Cut Pattern Matrix")
@@ -579,25 +729,38 @@ elif tool == "Multi-Plasmid Comparator":
             row = {}
             for p in plasmids:
                 if enz in cut_data[p["name"]]:
-                    row[p["name"]] = f"✅ {len(cut_data[p['name']][enz])}x"
+                    row[p["name"]] = f"✅ {len(cut_data[p['name']][enz])}×"
                 else:
                     row[p["name"]] = "❌"
             matrix_data[enz] = row
         matrix_df = pd.DataFrame(matrix_data).T
         matrix_df.index.name = "Enzyme"
-        st.dataframe(matrix_df, use_container_width=True)
+
+        # Highlight discriminating enzymes
+        def highlight_discriminating(row):
+            enz = row.name
+            if enz in discriminating:
+                return ["background-color: #2a3a2a; font-weight: bold"] * len(row)
+            return [""] * len(row)
+
+        st.dataframe(
+            matrix_df.style.apply(highlight_discriminating, axis=1),
+            use_container_width=True
+        )
+        st.caption("🟢 Highlighted rows = discriminating enzymes (different pattern between plasmids)")
 
         st.divider()
         st.subheader("🏆 Best Discriminating Digest Combinations")
 
         disc_resolved = [getattr(Restriction, e) for e in discriminating if hasattr(Restriction, e)]
-        also_use = [getattr(Restriction, e) for e in universal if hasattr(Restriction, e)]
+        also_use = [getattr(Restriction, e) for e in universal_same if hasattr(Restriction, e)]
         all_for_combo = disc_resolved + also_use
 
         combo_scores = []
         for size in range(1, combo_max2 + 1):
             for combo in combinations(all_for_combo, size):
                 combo_names = [e.__name__ for e in combo]
+                # Must include at least one discriminating enzyme
                 if not any(e in discriminating for e in combo_names):
                     continue
 
@@ -615,12 +778,15 @@ elif tool == "Multi-Plasmid Comparator":
                 if not valid:
                     continue
 
+                # Score: how different are the fragment patterns?
                 diff_score = 0
                 for i in range(len(frag_sets)):
                     for j in range(i+1, len(frag_sets)):
                         if len(frag_sets[i]) != len(frag_sets[j]):
-                            diff_score += 2
+                            # Different number of bands → big bonus
+                            diff_score += 2 + abs(len(frag_sets[i]) - len(frag_sets[j]))
                         else:
+                            # Same band count → score by size differences
                             diffs = [abs(a-b) / max(a, b)
                                      for a, b in zip(sorted(frag_sets[i]), sorted(frag_sets[j]))]
                             diff_score += sum(diffs)
@@ -636,11 +802,23 @@ elif tool == "Multi-Plasmid Comparator":
         top_combos = combo_scores[:top_n2]
 
         if not top_combos:
-            st.error("No discriminating combinations found with current settings.")
+            st.warning(
+                "No discriminating combinations passed the current filter settings. "
+                "Try relaxing: lower minimum band count, increase max fragment size, "
+                "or reduce the minimum size difference between bands."
+            )
+            # Show best available even if they don't meet all criteria, for guidance
+            if discriminating:
+                st.info(
+                    f"Discriminating enzymes found: **{', '.join(sorted(discriminating))}** — "
+                    "but their fragments don't meet the current size/band-count filters. "
+                    "Try adjusting the Analysis Settings in the sidebar."
+                )
         else:
             rows = []
             for i, c in enumerate(top_combos):
-                row = {"Rank": i+1, "Enzyme(s)": c["enzymes"]}
+                row = {"Rank": i+1, "Enzyme(s)": c["enzymes"],
+                       "Discrimination score": f"{c['diff_score']:.3f}"}
                 for j, p in enumerate(plasmids):
                     row[f"{p['name']} fragments (bp)"] = ", ".join(str(f) for f in c["frag_sets"][j])
                 rows.append(row)
@@ -650,7 +828,7 @@ elif tool == "Multi-Plasmid Comparator":
             max_size = max(p["size"] for p in plasmids)
 
             for i, combo in enumerate(top_combos[:5]):
-                st.markdown(f"**#{i+1} — {combo['enzymes']}**")
+                st.markdown(f"**#{i+1} — {combo['enzymes']}** (discrimination score: {combo['diff_score']:.3f})")
                 gel_results = []
                 lane_labels = []
                 for j, p in enumerate(plasmids):
@@ -689,4 +867,3 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
-
