@@ -112,42 +112,62 @@ MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 def read_sbd(raw, display_name="file"):
     """
     Parse SeqBuilder Pro (.sbd) binary files.
-    Strategy: try multiple encodings and regex patterns to extract the longest
-    plausible DNA sequence. SeqBuilder embeds the sequence as plain ASCII in
-    the binary blob, usually after a recognisable header tag.
+    Extracts DNA by scanning for runs of ATCG characters, then validates
+    each candidate by checking that ATCG content is >90% (real sequence)
+    vs. annotation noise which tends to have mixed characters.
     """
+    def atcg_purity(s):
+        """Fraction of strict ATCG in a string."""
+        if not s:
+            return 0.0
+        strict = sum(1 for c in s if c in "ATCG")
+        return strict / len(s)
+
+    def clean(s):
+        return re.sub(r'[^ATCG]', '', s.upper())
+
     for encoding in ("latin-1", "utf-8", "cp1252"):
         try:
             text = raw.decode(encoding, errors="replace")
 
-            # Strategy 1: look for sequence after common SeqBuilder tags
-            for tag in ("ORIGIN", "sequence", "Sequence", "DNA"):
+            # Strategy 1: look for sequence after common SeqBuilder section tags
+            for tag in ("ORIGIN", "sequence", "Sequence", "DNA", "dna"):
                 idx = text.find(tag)
-                if idx != -1:
-                    chunk = text[idx:idx + 500000]
-                    cleaned = re.sub(r'[^ATCGatcg]', '', chunk).upper()
-                    if len(cleaned) > 200:
-                        return cleaned
+                if idx == -1:
+                    continue
+                chunk = text[idx + len(tag): idx + len(tag) + 500000]
+                candidate = clean(chunk)
+                if len(candidate) > 500 and atcg_purity(chunk[:len(candidate) * 2 + 100]) > 0.3:
+                    return candidate
 
-            # Strategy 2: longest uninterrupted IUPAC DNA run (>=200 bp)
-            matches = re.findall(r'[ATCGatcgRYSWKMBDHVNrysw]{200,}', text)
-            if matches:
-                seq = max(matches, key=len).upper()
-                # Filter to strict ATCG only (remove ambiguous noise)
-                seq_strict = re.sub(r'[^ATCG]', '', seq)
-                if len(seq_strict) > 200:
-                    if len(matches) > 1:
-                        st.warning(
-                            f"⚠️ **{display_name}.sbd**: Found {len(matches)} sequence regions. "
-                            f"Using longest ({len(seq_strict):,} bp). "
-                            "For best results, export as FASTA from SeqBuilder.")
-                    return seq_strict
+            # Strategy 2: find all runs of IUPAC DNA chars, validate purity
+            matches = re.findall(r'[ATCGatcg]{100,}', text)
+            if not matches:
+                continue
+
+            # Score each match: length * purity — prefer long, clean sequences
+            scored = []
+            for m in matches:
+                c = clean(m)
+                purity = atcg_purity(m)
+                if purity > 0.90 and len(c) > 200:
+                    scored.append((len(c) * purity, c))
+
+            if scored:
+                scored.sort(reverse=True)
+                best = scored[0][1]
+                if len(scored) > 1:
+                    st.warning(
+                        f"⚠️ **{display_name}.sbd**: Found {len(scored)} candidate sequences. "
+                        f"Using best match ({len(best):,} bp). "
+                        "If the size looks wrong, export as FASTA from SeqBuilder.")
+                return best
 
         except Exception:
             continue
 
     st.warning(
-        f"⚠️ **{display_name}.sbd**: No DNA sequence could be extracted. "
+        f"⚠️ **{display_name}.sbd**: No valid DNA sequence could be extracted. "
         "Please export the sequence as FASTA or GenBank from SeqBuilder Pro.")
     return None
 
