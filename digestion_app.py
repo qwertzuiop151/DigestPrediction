@@ -1417,7 +1417,7 @@ elif tool == "Feature Annotation Viewer":
             # Primers: override arc to fixed ~20 nt width centered on real midpoint
             if primer_type_key(feat):
                 mid_a_ext = (a0 + a1) / 2
-                primer_arc = 2 * np.pi * (20 / plasmid_size)  # 20 nt worth of arc
+                primer_arc = 2 * np.pi * (7 / plasmid_size)   # ~7 nt worth of arc
                 primer_arc = max(primer_arc, np.radians(2))    # never less than 2°
                 a0 = mid_a_ext + primer_arc / 2
                 a1 = mid_a_ext - primer_arc / 2
