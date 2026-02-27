@@ -1318,7 +1318,14 @@ elif tool == "Feature Annotation Viewer":
     }
     DEFAULT_COLOR = "#888888"
 
-    def draw_annotation_map(record):
+    def get_label(feat):
+        return (feat.qualifiers.get("product", [""])[0] or
+                feat.qualifiers.get("gene",    [""])[0] or
+                feat.qualifiers.get("label",   [""])[0] or
+                feat.qualifiers.get("locus_tag",[""])[0] or
+                feat.type)
+
+    def draw_annotation_map(record, show_labels=True, zoom_start=None, zoom_end=None):
         plasmid_size = len(record.seq)
         plasmid_name = record.id or record.name or "Plasmid"
         fig = go.Figure()
@@ -1326,136 +1333,216 @@ elif tool == "Feature Annotation Viewer":
         def pos_to_angle(pos):
             return np.pi / 2 - 2 * np.pi * (pos - 1) / plasmid_size
 
-        # Backbone
-        theta = np.linspace(np.pi / 2, np.pi / 2 - 2 * np.pi, 500)
+        # Backbone ring
+        theta = np.linspace(np.pi / 2, np.pi / 2 - 2 * np.pi, 600)
         fig.add_trace(go.Scatter(
             x=np.cos(theta), y=np.sin(theta),
-            mode="lines", line=dict(color="#444466", width=8),
+            mode="lines", line=dict(color="#333355", width=18),
+            hoverinfo="skip", showlegend=False))
+        # Thin centre line of backbone
+        fig.add_trace(go.Scatter(
+            x=0.91 * np.cos(theta), y=0.91 * np.sin(theta),
+            mode="lines", line=dict(color="#555577", width=1),
             hoverinfo="skip", showlegend=False))
 
+        # Strand direction tick marks every ~5% of plasmid
+        tick_every = max(1, plasmid_size // 20)
+        for tick_pos in range(1, plasmid_size, tick_every):
+            a = pos_to_angle(tick_pos)
+            fig.add_shape(type="line",
+                x0=0.88 * np.cos(a), y0=0.88 * np.sin(a),
+                x1=0.94 * np.cos(a), y1=0.94 * np.sin(a),
+                line=dict(color="#555577", width=1))
+
+        # Features
         seen_types = {}
         for feat in record.features:
-            if feat.type in ("source", "gene"):
+            if feat.type in ("source",):
                 continue
             color = FEATURE_COLORS.get(feat.type, DEFAULT_COLOR)
-            start = int(feat.location.start) + 1
-            end   = int(feat.location.end)
+            start  = int(feat.location.start) + 1
+            end    = int(feat.location.end)
             strand = feat.location.strand
-
-            # Label: prefer product > gene > label > locus_tag > type
-            label = (feat.qualifiers.get("product", [""])[0] or
-                     feat.qualifiers.get("gene", [""])[0] or
-                     feat.qualifiers.get("label", [""])[0] or
-                     feat.qualifiers.get("locus_tag", [""])[0] or
-                     feat.type)
+            label  = get_label(feat)
+            size_bp = end - start + 1
 
             a0 = pos_to_angle(start)
             a1 = pos_to_angle(end)
             if a1 >= a0:
                 a1 -= 2 * np.pi
 
-            n_pts = max(30, int(abs(a1 - a0) / (2 * np.pi) * 400) + 2)
+            n_pts = max(40, int(abs(a1 - a0) / (2 * np.pi) * 500) + 2)
             arc = np.linspace(a0, a1, n_pts)
 
-            r_outer = 1.00
-            r_inner = 0.82 if strand == 1 else 0.72  # fwd outer, rev inner ring
+            # Two concentric rings: fwd (+) outer, rev (-) inner
             if strand == -1:
-                r_outer = 0.80
+                r_outer, r_inner = 0.84, 0.74
+            else:
+                r_outer, r_inner = 1.00, 0.86
 
             x_out = r_outer * np.cos(arc)
             y_out = r_outer * np.sin(arc)
             x_in  = r_inner * np.cos(arc[::-1])
             y_in  = r_inner * np.sin(arc[::-1])
 
-            # Arrow tip
-            arrow_angle = a0 if strand == 1 else a1
-            ar = (r_outer + r_inner) / 2
-            ax = [ar * 1.04 * np.cos(arrow_angle)]
-            ay = [ar * 1.04 * np.sin(arrow_angle)]
+            # Arrow: triangle at the leading end of the arc
+            r_mid = (r_outer + r_inner) / 2
+            tip_a = a0 if strand != -1 else a1   # leading end
+            side_a = tip_a + (0.06 if strand != -1 else -0.06)
+            arrow_x = [r_outer * np.cos(tip_a),
+                        r_mid   * np.cos(side_a),
+                        r_inner * np.cos(tip_a),
+                        r_outer * np.cos(tip_a)]
+            arrow_y = [r_outer * np.sin(tip_a),
+                        r_mid   * np.sin(side_a),
+                        r_inner * np.sin(tip_a),
+                        r_outer * np.sin(tip_a)]
 
-            hover = (f"<b>{label}</b><br>Type: {feat.type}<br>"
-                     f"Position: {start}–{end} bp<br>"
-                     f"Strand: {'(+)' if strand == 1 else '(-)'}<br>"
-                     f"Size: {end - start + 1} bp")
+            hover = (f"<b>{label}</b><br>"
+                     f"Type: {feat.type}<br>"
+                     f"Position: {start:,} – {end:,} bp<br>"
+                     f"Strand: {'(+) forward' if strand == 1 else '(-) reverse'}<br>"
+                     f"Size: {size_bp:,} bp")
 
+            # Feature arc body
             fig.add_trace(go.Scatter(
                 x=np.concatenate([x_out, x_in]),
                 y=np.concatenate([y_out, y_in]),
                 fill="toself", fillcolor=color,
-                line=dict(width=0.5, color=color), mode="lines",
+                line=dict(width=0, color=color), mode="lines",
                 text=hover, hoverinfo="text", hoveron="fills",
                 showlegend=feat.type not in seen_types,
                 name=feat.type,
                 legendgroup=feat.type,
-                opacity=0.85))
+                opacity=0.88))
             seen_types[feat.type] = True
 
-            # Label at midpoint
-            mid_angle = (a0 + a1) / 2
-            r_label = 1.16 if strand == 1 else 0.60
+            # Arrow head
+            fig.add_trace(go.Scatter(
+                x=arrow_x, y=arrow_y,
+                fill="toself", fillcolor=color,
+                line=dict(width=0), mode="lines",
+                hoverinfo="skip", showlegend=False,
+                legendgroup=feat.type, opacity=1.0))
+
+            # Label — only if show_labels=True and feature is large enough to warrant one
+            if show_labels:
+                arc_fraction = abs(a1 - a0) / (2 * np.pi)
+                if arc_fraction > 0.025 or size_bp > plasmid_size * 0.025:
+                    mid_a = (a0 + a1) / 2
+                    r_lbl = 1.14 if strand != -1 else 0.62
+                    fig.add_annotation(
+                        x=r_lbl * np.cos(mid_a),
+                        y=r_lbl * np.sin(mid_a),
+                        text=label[:20],
+                        showarrow=False,
+                        font=dict(color=color, size=9, family="Arial"),
+                        xanchor="center", yanchor="middle",
+                        bgcolor="rgba(26,26,46,0.7)",
+                        borderpad=2)
+
+        # bp scale ticks (four cardinal points)
+        for frac, pos_label in [(0, "1"), (0.25, f"{plasmid_size//4:,}"),
+                                 (0.5, f"{plasmid_size//2:,}"), (0.75, f"{3*plasmid_size//4:,}")]:
+            a = np.pi / 2 - 2 * np.pi * frac
             fig.add_annotation(
-                x=r_label * np.cos(mid_angle),
-                y=r_label * np.sin(mid_angle),
-                text=f"<span style='font-size:8px'>{label[:18]}</span>",
-                showarrow=False,
-                font=dict(color=color, size=8),
+                x=1.28 * np.cos(a), y=1.28 * np.sin(a),
+                text=f"<span style='font-size:9px;color:#666'>{pos_label}</span>",
+                showarrow=False, font=dict(color="#777", size=9),
                 xanchor="center", yanchor="middle")
+            fig.add_shape(type="line",
+                x0=1.01 * np.cos(a), y0=1.01 * np.sin(a),
+                x1=1.06 * np.cos(a), y1=1.06 * np.sin(a),
+                line=dict(color="#555577", width=1.5))
 
-        # Center
-        fig.add_annotation(x=0, y=0.1, text=f"<b>{plasmid_name}</b>",
-                           showarrow=False, font=dict(color="white", size=13, family="Arial Black"),
+        # Center labels
+        fig.add_annotation(x=0, y=0.10,
+                           text=f"<b>{plasmid_name}</b>",
+                           showarrow=False,
+                           font=dict(color="white", size=13, family="Arial Black"),
                            xanchor="center")
-        fig.add_annotation(x=0, y=-0.12, text=f"{plasmid_size:,} bp",
-                           showarrow=False, font=dict(color="#aaaaaa", size=11),
+        fig.add_annotation(x=0, y=-0.12,
+                           text=f"{plasmid_size:,} bp",
+                           showarrow=False,
+                           font=dict(color="#aaaaaa", size=11),
                            xanchor="center")
-
-        # Position 1 marker
-        fig.add_annotation(x=0, y=1.10, text="<b>1</b>",
-                           showarrow=False, font=dict(color="#ffffff", size=11),
-                           xanchor="center", yanchor="bottom")
-        fig.add_shape(type="line", x0=0, y0=0.96, x1=0, y1=1.06,
-                      line=dict(color="#ffffff", width=1.5, dash="dot"))
 
         fig.update_layout(
             paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
             title=dict(text=f"Feature Map  |  {plasmid_name}",
                        font=dict(color="white", size=14, family="Arial Black"), x=0.5),
-            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[-2.2, 2.2]),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[-1.65, 1.65]),
             yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
-                       range=[-2.2, 2.2], scaleanchor="x"),
-            height=680, width=680, showlegend=True,
-            legend=dict(font=dict(color="white", size=10),
-                        bgcolor="#2a2a4a", bordercolor="#555", borderwidth=1,
-                        title=dict(text="Feature type", font=dict(color="#aaa"))),
-            margin=dict(t=60, b=20, l=20, r=20), hovermode="closest")
+                       range=[-1.65, 1.65], scaleanchor="x"),
+            height=700, showlegend=True,
+            legend=dict(
+                font=dict(color="white", size=10),
+                bgcolor="#2a2a4a", bordercolor="#555", borderwidth=1,
+                title=dict(text="Feature type  (click to toggle)", font=dict(color="#aaa", size=9)),
+                itemclick="toggle", itemdoubleclick="toggleothers"),
+            margin=dict(t=50, b=10, l=10, r=10),
+            hovermode="closest",
+            dragmode="pan")
         return fig, plasmid_size
 
     with st.sidebar:
         st.header("⚙️ Parameters")
-        gb_file = st.file_uploader(
-            "Upload GenBank file",
-            type=["gb", "gbk", "genbank"],
-            help="GenBank files with feature annotations (.gb or .gbk)",
+        seq_file = st.file_uploader(
+            "Upload sequence file",
+            type=["gb", "gbk", "genbank", "fasta", "fa", "fas", "sbd"],
+            help="GenBank with annotations (.gb/.gbk) or FASTA/SeqBuilder for sequence-only view",
             key="uploader_feat")
 
-        if gb_file:
+        if seq_file:
             st.divider()
             st.subheader("Feature Filter")
             all_types_placeholder = st.empty()
 
-    if gb_file:
-        raw = gb_file.read()
-        try:
-            record = SeqIO.read(io.StringIO(raw.decode("utf-8")), "genbank")
-        except Exception:
+    # Alias for downstream code
+    gb_file = seq_file if "seq_file" in dir() else None
+
+    if seq_file:
+        raw = seq_file.read()
+        fname = seq_file.name.lower()
+        record = None
+
+        # Try GenBank first (has annotations)
+        for enc in ("utf-8", "latin-1"):
             try:
-                record = SeqIO.read(io.StringIO(raw.decode("latin-1")), "genbank")
-            except Exception as e:
-                st.error(f"Could not parse GenBank file: {e}")
-                st.stop()
+                record = SeqIO.read(io.StringIO(raw.decode(enc)), "genbank")
+                break
+            except Exception:
+                pass
+
+        # Fall back to FASTA
+        if record is None:
+            for enc in ("utf-8", "latin-1"):
+                try:
+                    record = SeqIO.read(io.StringIO(raw.decode(enc)), "fasta")
+                    break
+                except Exception:
+                    pass
+
+        # Fall back to .sbd
+        if record is None and fname.endswith(".sbd"):
+            seq_str = read_sbd(raw, seq_file.name.rsplit(".", 1)[0])
+            if seq_str:
+                from Bio.SeqRecord import SeqRecord as _SR
+                record = _SR(Seq(seq_str),
+                             id=seq_file.name.rsplit(".", 1)[0],
+                             name=seq_file.name.rsplit(".", 1)[0],
+                             description="")
+
+        if record is None:
+            st.error("Could not parse the uploaded file. Please use GenBank, FASTA, or SeqBuilder format.")
+            st.stop()
+
+        if not record.features:
+            st.info("ℹ️ No feature annotations found in this file. The map will show the plasmid backbone only. "
+                    "For full annotation support, use a GenBank file exported from SnapGene, Benchling, or ApE.")
 
         plasmid_size = len(record.seq)
-        plasmid_name = record.id or record.name or gb_file.name
+        plasmid_name = record.id or record.name or seq_file.name
         st.success(f"✅ {plasmid_name} loaded ({plasmid_size:,} bp)")
 
         feat_types = sorted(set(f.type for f in record.features if f.type != "source"))
@@ -1467,6 +1554,20 @@ elif tool == "Feature Annotation Viewer":
                 options=feat_types,
                 default=feat_types,
                 format_func=lambda t: f"{t} ({feat_counts[t]})")
+            st.divider()
+            show_labels = st.checkbox("Show labels on map", value=True,
+                help="Turn off for cleaner map when many features are present. Hover still works.")
+            st.divider()
+            st.markdown("**Linear zoom view**")
+            st.caption("Inspect a specific region in detail.")
+            zoom_enabled = st.checkbox("Enable zoom panel", value=False)
+            if zoom_enabled:
+                zoom_start = st.number_input("Start (bp)", min_value=1,
+                    max_value=plasmid_size, value=1, step=100)
+                zoom_end = st.number_input("End (bp)", min_value=1,
+                    max_value=plasmid_size, value=min(plasmid_size, 2000), step=100)
+            else:
+                zoom_start, zoom_end = None, None
 
         # Filter record features
         from Bio.SeqRecord import SeqRecord
@@ -1476,49 +1577,112 @@ elif tool == "Feature Annotation Viewer":
         filtered.features = [f for f in record.features
                               if f.type == "source" or f.type in selected_types]
 
-        col_map, col_table = st.columns([1.1, 1], gap="large")
+        # Build feature table rows
+        feat_rows = []
+        for f in filtered.features:
+            if f.type == "source":
+                continue
+            feat_rows.append({
+                "Type": f.type,
+                "Label": get_label(f),
+                "Start": int(f.location.start) + 1,
+                "End": int(f.location.end),
+                "Strand": "+" if f.location.strand == 1 else "-",
+                "Size (bp)": int(f.location.end) - int(f.location.start),
+            })
+        feat_df = pd.DataFrame(feat_rows).sort_values("Start") if feat_rows else pd.DataFrame()
+
+        col_map, col_table = st.columns([1.15, 1], gap="large")
 
         with col_map:
             with st.spinner("Rendering map..."):
-                fig_annot, _ = draw_annotation_map(filtered)
+                fig_annot, _ = draw_annotation_map(filtered, show_labels=show_labels)
                 st.plotly_chart(fig_annot, use_container_width=True, key="feat_map")
 
+            # Linear zoom panel
+            if zoom_enabled and zoom_start and zoom_end and zoom_start < zoom_end:
+                st.markdown(f"**Region {zoom_start:,} – {zoom_end:,} bp**")
+                region_feats = [f for f in filtered.features
+                                if f.type != "source"
+                                and int(f.location.start) < zoom_end
+                                and int(f.location.end) > zoom_start]
+                if region_feats:
+                    fig_linear = go.Figure()
+                    fig_linear.add_shape(type="line",
+                        x0=zoom_start, x1=zoom_end, y0=0.5, y1=0.5,
+                        line=dict(color="#444466", width=6))
+                    for fi, feat in enumerate(region_feats):
+                        color = FEATURE_COLORS.get(feat.type, DEFAULT_COLOR)
+                        fs = max(int(feat.location.start) + 1, zoom_start)
+                        fe = min(int(feat.location.end), zoom_end)
+                        strand = feat.location.strand
+                        y_pos = 0.7 if strand != -1 else 0.3
+                        lbl = get_label(feat)
+                        fig_linear.add_shape(type="rect",
+                            x0=fs, x1=fe, y0=y_pos - 0.12, y1=y_pos + 0.12,
+                            fillcolor=color, opacity=0.85,
+                            line=dict(width=0))
+                        fig_linear.add_trace(go.Scatter(
+                            x=[(fs + fe) / 2], y=[y_pos],
+                            mode="markers", marker=dict(size=1, opacity=0),
+                            text=f"<b>{lbl}</b><br>{feat.type}<br>{int(feat.location.start)+1:,}–{int(feat.location.end):,} bp",
+                            hoverinfo="text", showlegend=False))
+                        if fe - fs > (zoom_end - zoom_start) * 0.04:
+                            fig_linear.add_annotation(
+                                x=(fs + fe) / 2, y=y_pos,
+                                text=lbl[:16], showarrow=False,
+                                font=dict(color="white", size=9),
+                                xanchor="center", yanchor="middle")
+                    fig_linear.add_annotation(x=(zoom_start + zoom_end)/2, y=0.08,
+                        text="← reverse strand", showarrow=False,
+                        font=dict(color="#666", size=9))
+                    fig_linear.add_annotation(x=(zoom_start + zoom_end)/2, y=0.92,
+                        text="forward strand →", showarrow=False,
+                        font=dict(color="#666", size=9))
+                    fig_linear.update_layout(
+                        paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
+                        xaxis=dict(showgrid=False, color="#666",
+                                   range=[zoom_start, zoom_end],
+                                   tickformat=","),
+                        yaxis=dict(showgrid=False, showticklabels=False,
+                                   range=[0, 1]),
+                        height=200, margin=dict(t=10, b=30, l=10, r=10),
+                        hovermode="closest")
+                    st.plotly_chart(fig_linear, use_container_width=True, key="linear_zoom")
+                else:
+                    st.caption("No features in selected region.")
+
         with col_table:
-            st.subheader(f"Features ({len(filtered.features) - 1})")
-            feat_rows = []
-            for f in filtered.features:
-                if f.type == "source":
-                    continue
-                label = (f.qualifiers.get("product", [""])[0] or
-                         f.qualifiers.get("gene", [""])[0] or
-                         f.qualifiers.get("label", [""])[0] or
-                         f.qualifiers.get("locus_tag", [""])[0] or "")
-                feat_rows.append({
-                    "Type": f.type,
-                    "Label": label,
-                    "Start": int(f.location.start) + 1,
-                    "End": int(f.location.end),
-                    "Strand": "+" if f.location.strand == 1 else "-",
-                    "Size (bp)": int(f.location.end) - int(f.location.start),
-                })
-            feat_df = pd.DataFrame(feat_rows).sort_values("Start")
+            n_feats = len(feat_df) if not feat_df.empty else 0
+            st.subheader(f"Features ({n_feats})")
 
-            # Color-code by type
-            def color_type(val):
-                c = FEATURE_COLORS.get(val, DEFAULT_COLOR)
-                return f"background-color: {c}22; color: {c}; font-weight: 600"
+            # Search box
+            search = st.text_input("Search features", placeholder="Gene name, type, position...",
+                                   key="feat_search")
+            if search and not feat_df.empty:
+                mask = feat_df.apply(
+                    lambda row: search.lower() in str(row).lower(), axis=1)
+                feat_df = feat_df[mask]
+                st.caption(f'{len(feat_df)} match(es) for "{search}"')
 
-            st.dataframe(
-                feat_df.style.applymap(color_type, subset=["Type"]),
-                use_container_width=True, hide_index=True, height=580)
+            if not feat_df.empty:
+                def color_type(val):
+                    c = FEATURE_COLORS.get(val, DEFAULT_COLOR)
+                    return f"background-color: {c}22; color: {c}; font-weight: 600"
+
+                st.dataframe(
+                    feat_df.style.applymap(color_type, subset=["Type"]),
+                    use_container_width=True, hide_index=True, height=540)
+            else:
+                st.caption("No features to display.")
 
             # GenBank download
             gb_out = io.StringIO()
             SeqIO.write(record, gb_out, "genbank")
             st.download_button(
-                "Download annotated GenBank",
+                "Download GenBank",
                 data=gb_out.getvalue(),
-                file_name=f"{plasmid_name}_annotated.gb",
+                file_name=f"{plasmid_name}.gb",
                 mime="text/plain")
     else:
         st.info("👈 Upload a GenBank file (.gb or .gbk) with feature annotations.")
