@@ -112,64 +112,29 @@ MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 def read_sbd(raw, display_name="file"):
     """
     Parse SeqBuilder Pro (.sbd) binary files.
-    Extracts DNA by scanning for runs of ATCG characters, then validates
-    each candidate by checking that ATCG content is >90% (real sequence)
-    vs. annotation noise which tends to have mixed characters.
+    SeqBuilder embeds the sequence as plain ASCII in the binary blob.
+    Extract the longest continuous run of ATCG characters.
     """
-    def atcg_purity(s):
-        """Fraction of strict ATCG in a string."""
-        if not s:
-            return 0.0
-        strict = sum(1 for c in s if c in "ATCG")
-        return strict / len(s)
-
-    def clean(s):
-        return re.sub(r'[^ATCG]', '', s.upper())
-
-    for encoding in ("latin-1", "utf-8", "cp1252"):
-        try:
-            text = raw.decode(encoding, errors="replace")
-
-            # Strategy 1: look for sequence after common SeqBuilder section tags
-            for tag in ("ORIGIN", "sequence", "Sequence", "DNA", "dna"):
-                idx = text.find(tag)
-                if idx == -1:
-                    continue
-                chunk = text[idx + len(tag): idx + len(tag) + 500000]
-                candidate = clean(chunk)
-                if len(candidate) > 500 and atcg_purity(chunk[:len(candidate) * 2 + 100]) > 0.3:
-                    return candidate
-
-            # Strategy 2: find all runs of IUPAC DNA chars, validate purity
-            matches = re.findall(r'[ATCGatcg]{100,}', text)
-            if not matches:
-                continue
-
-            # Score each match: length * purity — prefer long, clean sequences
-            scored = []
-            for m in matches:
-                c = clean(m)
-                purity = atcg_purity(m)
-                if purity > 0.90 and len(c) > 200:
-                    scored.append((len(c) * purity, c))
-
-            if scored:
-                scored.sort(reverse=True)
-                best = scored[0][1]
-                if len(scored) > 1:
-                    st.warning(
-                        f"⚠️ **{display_name}.sbd**: Found {len(scored)} candidate sequences. "
-                        f"Using best match ({len(best):,} bp). "
-                        "If the size looks wrong, export as FASTA from SeqBuilder.")
-                return best
-
-        except Exception:
-            continue
-
-    st.warning(
-        f"⚠️ **{display_name}.sbd**: No valid DNA sequence could be extracted. "
-        "Please export the sequence as FASTA or GenBank from SeqBuilder Pro.")
-    return None
+    try:
+        text = raw.decode("latin-1")
+        matches = re.findall(r'[ATCGatcg]{100,}', text)
+        if not matches:
+            st.warning(
+                f"⚠️ **{display_name}.sbd**: No DNA sequence found. "
+                "The file may be corrupted or use an unsupported SeqBuilder version. "
+                "Try exporting as FASTA or GenBank from SeqBuilder Pro.")
+            return None
+        seq = max(matches, key=len).upper()
+        if len(matches) > 1:
+            total_found = sum(len(m) for m in matches)
+            st.warning(
+                f"⚠️ **{display_name}.sbd**: Found {len(matches)} sequence regions "
+                f"({total_found:,} bp total). Using longest ({len(seq):,} bp). "
+                "If this seems wrong, export as FASTA from SeqBuilder.")
+        return seq
+    except Exception as e:
+        st.warning(f"⚠️ **{display_name}.sbd**: Parse error: {e}")
+        return None
 
 def load_sequence(uploaded_file):
     if uploaded_file is None:
@@ -1089,3 +1054,4 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
+        
