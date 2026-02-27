@@ -156,7 +156,11 @@ def draw_gel(results, plasmid_size, title_suffix=""):
     def bp_to_y(bp):
         return np.log10(bp)
 
-    lane_width = 0.35
+    # Fixe Spurbreite unabhängig von Anzahl der Ergebnisse
+    lane_width = 0.25
+    band_height = 0.006
+    band_height_thick = 0.008
+
     colors = ["#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3",
               "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#ff6b6b", "#4ecdc4"]
 
@@ -165,14 +169,14 @@ def draw_gel(results, plasmid_size, title_suffix=""):
     for size in marker_sizes:
         y = bp_to_y(size)
         is_thick = size in thick_bands
-        height = 0.008 if is_thick else 0.006
+        height = band_height_thick if is_thick else band_height
         intensity = 0.2 + 0.75 * (size / max_marker)
         fig.add_shape(type="rect",
                       x0=-lane_width, x1=lane_width,
                       y0=y - height, y1=y + height,
                       fillcolor="white", opacity=intensity, line=dict(width=0))
         fig.add_shape(type="rect",
-                      x0=-lane_width + 0.05, x1=lane_width - 0.05,
+                      x0=-lane_width + 0.04, x1=lane_width - 0.04,
                       y0=y - 0.002, y1=y + 0.002,
                       fillcolor="white", opacity=intensity * 0.2, line=dict(width=0))
         fig.add_annotation(x=-lane_width - 0.05, y=y,
@@ -203,10 +207,10 @@ def draw_gel(results, plasmid_size, title_suffix=""):
             intensity = 0.2 + 0.75 * (frag / max_frag)
             fig.add_shape(type="rect",
                           x0=lane_x - lane_width, x1=lane_x + lane_width,
-                          y0=y - 0.008, y1=y + 0.008,
+                          y0=y - band_height, y1=y + band_height,
                           fillcolor="white", opacity=intensity, line=dict(width=0))
             fig.add_shape(type="rect",
-                          x0=lane_x - lane_width + 0.05, x1=lane_x + lane_width - 0.05,
+                          x0=lane_x - lane_width + 0.04, x1=lane_x + lane_width - 0.04,
                           y0=y - 0.002, y1=y + 0.002,
                           fillcolor="white", opacity=intensity * 0.3, line=dict(width=0))
             fig.add_trace(go.Scatter(
@@ -215,6 +219,7 @@ def draw_gel(results, plasmid_size, title_suffix=""):
                 hovertemplate=f"<b>{result['enzymes']}</b><br>{frag} bp<extra></extra>",
                 showlegend=False))
 
+    n_lanes = len(results) + 1
     fig.update_layout(
         paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
         title=dict(
@@ -224,7 +229,10 @@ def draw_gel(results, plasmid_size, title_suffix=""):
                    range=[-1.2, len(results) + 0.5]),
         yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
                    range=[y_min - 0.1, y_max + 0.3]),
-        height=600, margin=dict(t=100, b=20, l=80, r=20),
+        # Fixe Breite: 75px pro Spur — unabhängig vom Fenster
+        height=600,
+        width=max(600, n_lanes * 75),
+        margin=dict(t=100, b=20, l=80, r=20),
         hovermode="closest")
     return fig
 
@@ -315,4 +323,5 @@ else:
 
     **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
+
 
