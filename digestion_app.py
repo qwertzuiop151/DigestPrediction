@@ -273,7 +273,10 @@ with st.sidebar:
     st.caption("💡 No file required — without an upload the tool runs in demo mode using a randomly generated 10 kb plasmid.")
 
     run = st.button("▶  Run Analysis", type="primary", use_container_width=True)
-
+    prefer_short = st.checkbox(
+        "Prioritise short fragments",
+        value=False,
+        help="Ranks results by smallest largest fragment — minimises total gel run time")
     st.divider()
     st.subheader("🔧 Analysis Settings")
 
@@ -284,10 +287,7 @@ with st.sidebar:
     max_frags = st.slider("Maximum number of bands", 2, 10, 6)
     min_diff = st.slider("Minimum relative size difference between adjacent bands",
                          0.05, 0.5, 0.15, 0.05)
-    prefer_short = st.checkbox(
-        "Prioritise short fragments",
-        value=False,
-        help="Ranks results by smallest largest fragment — minimises total gel run time")
+   
     combo_min = st.slider("Minimum enzymes per digest", 1, 3, 1)
     combo_max = st.slider("Maximum enzymes per digest", 1, 3, 2,
                           help="⚠️ Setting this to 3 significantly increases computation time")
@@ -369,3 +369,4 @@ else:
     - Use *Prioritise short fragments* if gel run time is a concern
     - Enzymes not present in the uploaded sequence are automatically excluded
     """)
+
