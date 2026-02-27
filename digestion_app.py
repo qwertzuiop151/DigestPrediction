@@ -312,7 +312,8 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
 
     # Helper: plasmid position → angle (0 bp = top = -π/2, clockwise)
     def pos_to_angle(pos):
-    return 2 * np.pi * (pos - 1) / plasmid_size - np.pi / 2
+        return 2 * np.pi * (pos - 1) / plasmid_size - np.pi / 2    
+
 
     # ── Draw plasmid backbone ──
     theta = np.linspace(0, 2 * np.pi, 500)
@@ -892,6 +893,7 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
+
 
 
 
