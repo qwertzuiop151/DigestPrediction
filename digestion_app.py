@@ -63,6 +63,8 @@ st.sidebar.markdown(
 
 _t1 = st.session_state.active_tool == "Restriction Digest Planner"
 _t2 = st.session_state.active_tool == "Multi-Plasmid Comparator"
+_t3 = st.session_state.active_tool == "Primer Analyzer"
+_t4 = st.session_state.active_tool == "Feature Annotation Viewer"
 
 if st.sidebar.button(
     ("✅ Restriction Digest Planner  ●  ACTIVE" if _t1
@@ -82,6 +84,26 @@ if st.sidebar.button(
     use_container_width=True,
     help="Compare digest patterns and identify discriminating enzymes across constructs"):
     st.session_state.active_tool = "Multi-Plasmid Comparator"
+    st.rerun()
+
+if st.sidebar.button(
+    ("✅ Primer Analyzer  ●  ACTIVE" if _t3
+     else "🔬 Primer Analyzer"),
+    key="btn_tool3",
+    type="primary" if _t3 else "secondary",
+    use_container_width=True,
+    help="Calculate Tm, GC content, and check for hairpins and dimers"):
+    st.session_state.active_tool = "Primer Analyzer"
+    st.rerun()
+
+if st.sidebar.button(
+    ("✅ Feature Annotation Viewer  ●  ACTIVE" if _t4
+     else "🗺️ Feature Annotation Viewer"),
+    key="btn_tool4",
+    type="primary" if _t4 else "secondary",
+    use_container_width=True,
+    help="Visualise annotated features on a plasmid map from GenBank files"):
+    st.session_state.active_tool = "Feature Annotation Viewer"
     st.rerun()
 
 tool = st.session_state.active_tool
@@ -607,6 +629,70 @@ if tool is None:
             st.session_state.active_tool = "Multi-Plasmid Comparator"
             st.rerun()
 
+    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
+    col3, col4 = st.columns(2, gap="large")
+
+    with col3:
+        st.markdown("""
+        <div style="
+            background: linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.05));
+            border: 1.5px solid #fbbf24;
+            border-radius: 14px;
+            padding: 2rem;
+            height: 100%;
+        ">
+            <div style="font-size:2.5rem;margin-bottom:0.75rem;">🔬</div>
+            <div style="font-size:1.3rem;font-weight:800;color:#ffffff;margin-bottom:0.75rem;">
+                Primer Analyzer
+            </div>
+            <div style="font-size:0.9rem;color:#fde68a;line-height:1.6;">
+                Paste one or more primer sequences to calculate melting temperature,
+                GC content, and screen for potential hairpin structures and
+                primer-dimer formation.<br><br>
+                Supports both Nearest-Neighbor (SantaLucia 1998) and
+                Wallace Rule Tm calculations.
+            </div>
+            <div style="margin-top:1.5rem;">
+                <div style="font-size:0.75rem;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">Input</div>
+                <div style="font-size:0.85rem;color:#888;">Paste raw primer sequence(s) directly</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
+        if st.button("Open Primer Analyzer →", use_container_width=True, type="primary", key="ov_btn3"):
+            st.session_state.active_tool = "Primer Analyzer"
+            st.rerun()
+
+    with col4:
+        st.markdown("""
+        <div style="
+            background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05));
+            border: 1.5px solid #ef4444;
+            border-radius: 14px;
+            padding: 2rem;
+            height: 100%;
+        ">
+            <div style="font-size:2.5rem;margin-bottom:0.75rem;">🗺️</div>
+            <div style="font-size:1.3rem;font-weight:800;color:#ffffff;margin-bottom:0.75rem;">
+                Feature Annotation Viewer
+            </div>
+            <div style="font-size:0.9rem;color:#fca5a5;line-height:1.6;">
+                Upload a GenBank file to visualise all annotated features —
+                genes, promoters, terminators, primer sites, and restriction
+                sites — on an interactive circular plasmid map.<br><br>
+                Click any feature for details. Color-coded by feature type.
+            </div>
+            <div style="margin-top:1.5rem;">
+                <div style="font-size:0.75rem;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;">Accepts</div>
+                <div style="font-size:0.85rem;color:#888;">GenBank (.gb / .gbk) with annotations</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<div style='height:0.75rem'></div>", unsafe_allow_html=True)
+        if st.button("Open Feature Annotation Viewer →", use_container_width=True, type="primary", key="ov_btn4"):
+            st.session_state.active_tool = "Feature Annotation Viewer"
+            st.rerun()
+
 # TOOL 1: RESTRICTION DIGEST PLANNER
 elif tool == "Restriction Digest Planner":
     st.markdown("### 🧪 Restriction Digest Planner")
@@ -1054,4 +1140,394 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
-        
+
+# TOOL 3: PRIMER ANALYZER
+elif tool == "Primer Analyzer":
+    from Bio.SeqUtils.MeltingTemp import Tm_NN, Tm_Wallace
+    from Bio.SeqUtils import gc_fraction
+
+    st.markdown("### 🔬 Primer Analyzer")
+    st.markdown("Calculate melting temperature, GC content, and screen for hairpin and primer-dimer formation.")
+
+    with st.sidebar:
+        st.header("⚙️ Parameters")
+        st.subheader("Reaction Conditions")
+        conc_primer = st.number_input("Primer concentration (nM)", value=250, min_value=1, max_value=10000, step=50)
+        conc_na = st.number_input("Na⁺ concentration (mM)", value=50, min_value=1, max_value=1000, step=10)
+        st.divider()
+        st.subheader("Hairpin / Dimer Check")
+        min_stem = st.slider("Minimum stem length (bp)", 3, 8, 4,
+                             help="Minimum complementary run to flag as potential hairpin or dimer")
+
+    st.markdown("#### Paste primer sequences")
+    st.caption("One primer per line. Optionally prefix with a name: `FwdPrimer  ATCGATCG...`")
+    raw_input = st.text_area("Primer sequences", height=160,
+                              placeholder="Fwd_primer   ATCGATCGATCGATCG\nRev_primer   TAGCTAGCTAGCTAGC\nor just paste sequences without names")
+
+    def parse_primers(text):
+        primers = []
+        for i, line in enumerate(text.strip().splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            # Check if first token looks like a name (no pure ATCG)
+            if len(parts) >= 2 and re.search(r'[^ATCGatcg]', parts[0]):
+                name = parts[0]
+                seq = re.sub(r'[^ATCGatcg]', '', ''.join(parts[1:])).upper()
+            else:
+                seq = re.sub(r'[^ATCGatcg]', '', ''.join(parts)).upper()
+                name = f"Primer {i+1}"
+            if len(seq) >= 10:
+                primers.append((name, seq))
+        return primers
+
+    def check_hairpin(seq, min_stem):
+        """Check for potential hairpin: find complementary runs within the sequence."""
+        comp = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
+        rev_comp = ''.join(comp.get(b, 'N') for b in reversed(seq))
+        hits = []
+        for i in range(len(seq) - min_stem * 2 - 3):
+            for length in range(min_stem, min((len(seq) - i) // 2, 10)):
+                stem = seq[i:i+length]
+                rc_stem = ''.join(comp.get(b, 'N') for b in reversed(stem))
+                if rc_stem in seq[i+length+3:]:
+                    hits.append(f"stem: {stem} (pos {i+1}, {length} bp)")
+                    break
+        return hits[:3]  # return max 3 hits
+
+    def check_dimer(seq1, seq2, min_stem):
+        """Check for complementarity between two primers."""
+        comp = {'A': 'T', 'T': 'A', 'C': 'G', 'G': 'C'}
+        rc2 = ''.join(comp.get(b, 'N') for b in reversed(seq2))
+        hits = []
+        for i in range(len(seq1) - min_stem + 1):
+            for length in range(min_stem, min(len(seq1) - i, 12)):
+                chunk = seq1[i:i+length]
+                if chunk in rc2:
+                    hits.append(f"{chunk} ({length} bp)")
+                    break
+        return hits[:3]
+
+    if raw_input and raw_input.strip():
+        primers = parse_primers(raw_input)
+        if not primers:
+            st.error("No valid primer sequences found. Sequences must be at least 10 bp.")
+        else:
+            st.markdown("---")
+            st.subheader("Results")
+
+            rows = []
+            for name, seq in primers:
+                seq_obj = Seq(seq)
+                try:
+                    tm_nn = Tm_NN(seq_obj,
+                                  Na=conc_na,
+                                  dnac1=conc_primer,
+                                  dnac2=0)
+                except Exception:
+                    tm_nn = None
+                try:
+                    tm_w = Tm_Wallace(seq_obj)
+                except Exception:
+                    tm_w = None
+
+                gc = gc_fraction(seq_obj) * 100
+                hairpins = check_hairpin(seq, min_stem)
+
+                rows.append({
+                    "Name": name,
+                    "Sequence (5'→3')": seq,
+                    "Length (bp)": len(seq),
+                    "Tm NN (°C)": f"{tm_nn:.1f}" if tm_nn else "n/a",
+                    "Tm Wallace (°C)": f"{tm_w:.1f}" if tm_w else "n/a",
+                    "GC (%)": f"{gc:.1f}",
+                    "Hairpin risk": "⚠️ Possible" if hairpins else "✅ Low",
+                })
+
+            df = pd.DataFrame(rows)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            # Tm comparison chart
+            if len(primers) > 1:
+                st.subheader("Tm Comparison")
+                fig = go.Figure()
+                names = [r["Name"] for r in rows]
+                tm_nn_vals = [float(r["Tm NN (°C)"]) if r["Tm NN (°C)"] != "n/a" else None for r in rows]
+                tm_w_vals  = [float(r["Tm Wallace (°C)"]) if r["Tm Wallace (°C)"] != "n/a" else None for r in rows]
+
+                fig.add_trace(go.Bar(name="Nearest-Neighbor", x=names, y=tm_nn_vals,
+                                     marker_color="#7c3aed"))
+                fig.add_trace(go.Bar(name="Wallace Rule", x=names, y=tm_w_vals,
+                                     marker_color="#10b981"))
+                fig.update_layout(
+                    paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
+                    font=dict(color="white"),
+                    barmode="group",
+                    yaxis=dict(title="Tm (°C)", gridcolor="#333"),
+                    xaxis=dict(gridcolor="#333"),
+                    legend=dict(bgcolor="#2a2a4a"),
+                    height=350, margin=dict(t=30, b=20, l=40, r=20))
+                st.plotly_chart(fig, use_container_width=True)
+
+            # Dimer check
+            if len(primers) >= 2:
+                st.subheader("Primer-Dimer Screening")
+                dimer_rows = []
+                for i in range(len(primers)):
+                    for j in range(i, len(primers)):
+                        hits = check_dimer(primers[i][1], primers[j][1], min_stem)
+                        label = "Self" if i == j else f"{primers[i][0]} + {primers[j][0]}"
+                        dimer_rows.append({
+                            "Pair": label,
+                            "Risk": "⚠️ Possible" if hits else "✅ Low",
+                            "Complementary regions": ", ".join(hits) if hits else "None detected"
+                        })
+                st.dataframe(pd.DataFrame(dimer_rows), use_container_width=True, hide_index=True)
+
+            # Hairpin detail
+            with st.expander("Hairpin detail"):
+                for name, seq in primers:
+                    hits = check_hairpin(seq, min_stem)
+                    if hits:
+                        st.markdown(f"**{name}**: {'; '.join(hits)}")
+                    else:
+                        st.markdown(f"**{name}**: No hairpin detected")
+    else:
+        st.info("👈 Paste one or more primer sequences to begin analysis.")
+
+
+# TOOL 4: FEATURE ANNOTATION VIEWER
+elif tool == "Feature Annotation Viewer":
+    st.markdown("### 🗺️ Feature Annotation Viewer")
+    st.markdown("Visualise annotated features on an interactive circular plasmid map from a GenBank file.")
+
+    FEATURE_COLORS = {
+        "CDS":          "#4e79a7",
+        "gene":         "#f28e2b",
+        "promoter":     "#e15759",
+        "terminator":   "#76b7b2",
+        "rep_origin":   "#59a14f",
+        "primer_bind":  "#edc948",
+        "misc_feature": "#b07aa1",
+        "regulatory":   "#ff9da7",
+        "LTR":          "#9c755f",
+        "RBS":          "#bab0ac",
+        "sig_peptide":  "#d37295",
+        "mat_peptide":  "#a0cbe8",
+    }
+    DEFAULT_COLOR = "#888888"
+
+    def draw_annotation_map(record):
+        plasmid_size = len(record.seq)
+        plasmid_name = record.id or record.name or "Plasmid"
+        fig = go.Figure()
+
+        def pos_to_angle(pos):
+            return np.pi / 2 - 2 * np.pi * (pos - 1) / plasmid_size
+
+        # Backbone
+        theta = np.linspace(np.pi / 2, np.pi / 2 - 2 * np.pi, 500)
+        fig.add_trace(go.Scatter(
+            x=np.cos(theta), y=np.sin(theta),
+            mode="lines", line=dict(color="#444466", width=8),
+            hoverinfo="skip", showlegend=False))
+
+        seen_types = {}
+        for feat in record.features:
+            if feat.type in ("source", "gene"):
+                continue
+            color = FEATURE_COLORS.get(feat.type, DEFAULT_COLOR)
+            start = int(feat.location.start) + 1
+            end   = int(feat.location.end)
+            strand = feat.location.strand
+
+            # Label: prefer product > gene > label > locus_tag > type
+            label = (feat.qualifiers.get("product", [""])[0] or
+                     feat.qualifiers.get("gene", [""])[0] or
+                     feat.qualifiers.get("label", [""])[0] or
+                     feat.qualifiers.get("locus_tag", [""])[0] or
+                     feat.type)
+
+            a0 = pos_to_angle(start)
+            a1 = pos_to_angle(end)
+            if a1 >= a0:
+                a1 -= 2 * np.pi
+
+            n_pts = max(30, int(abs(a1 - a0) / (2 * np.pi) * 400) + 2)
+            arc = np.linspace(a0, a1, n_pts)
+
+            r_outer = 1.00
+            r_inner = 0.82 if strand == 1 else 0.72  # fwd outer, rev inner ring
+            if strand == -1:
+                r_outer = 0.80
+
+            x_out = r_outer * np.cos(arc)
+            y_out = r_outer * np.sin(arc)
+            x_in  = r_inner * np.cos(arc[::-1])
+            y_in  = r_inner * np.sin(arc[::-1])
+
+            # Arrow tip
+            arrow_angle = a0 if strand == 1 else a1
+            ar = (r_outer + r_inner) / 2
+            ax = [ar * 1.04 * np.cos(arrow_angle)]
+            ay = [ar * 1.04 * np.sin(arrow_angle)]
+
+            hover = (f"<b>{label}</b><br>Type: {feat.type}<br>"
+                     f"Position: {start}–{end} bp<br>"
+                     f"Strand: {'(+)' if strand == 1 else '(-)'}<br>"
+                     f"Size: {end - start + 1} bp")
+
+            fig.add_trace(go.Scatter(
+                x=np.concatenate([x_out, x_in]),
+                y=np.concatenate([y_out, y_in]),
+                fill="toself", fillcolor=color,
+                line=dict(width=0.5, color=color), mode="lines",
+                text=hover, hoverinfo="text", hoveron="fills",
+                showlegend=feat.type not in seen_types,
+                name=feat.type,
+                legendgroup=feat.type,
+                opacity=0.85))
+            seen_types[feat.type] = True
+
+            # Label at midpoint
+            mid_angle = (a0 + a1) / 2
+            r_label = 1.16 if strand == 1 else 0.60
+            fig.add_annotation(
+                x=r_label * np.cos(mid_angle),
+                y=r_label * np.sin(mid_angle),
+                text=f"<span style='font-size:8px'>{label[:18]}</span>",
+                showarrow=False,
+                font=dict(color=color, size=8),
+                xanchor="center", yanchor="middle")
+
+        # Center
+        fig.add_annotation(x=0, y=0.1, text=f"<b>{plasmid_name}</b>",
+                           showarrow=False, font=dict(color="white", size=13, family="Arial Black"),
+                           xanchor="center")
+        fig.add_annotation(x=0, y=-0.12, text=f"{plasmid_size:,} bp",
+                           showarrow=False, font=dict(color="#aaaaaa", size=11),
+                           xanchor="center")
+
+        # Position 1 marker
+        fig.add_annotation(x=0, y=1.10, text="<b>1</b>",
+                           showarrow=False, font=dict(color="#ffffff", size=11),
+                           xanchor="center", yanchor="bottom")
+        fig.add_shape(type="line", x0=0, y0=0.96, x1=0, y1=1.06,
+                      line=dict(color="#ffffff", width=1.5, dash="dot"))
+
+        fig.update_layout(
+            paper_bgcolor="#1a1a2e", plot_bgcolor="#1a1a2e",
+            title=dict(text=f"Feature Map  |  {plasmid_name}",
+                       font=dict(color="white", size=14, family="Arial Black"), x=0.5),
+            xaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[-2.2, 2.2]),
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False,
+                       range=[-2.2, 2.2], scaleanchor="x"),
+            height=680, width=680, showlegend=True,
+            legend=dict(font=dict(color="white", size=10),
+                        bgcolor="#2a2a4a", bordercolor="#555", borderwidth=1,
+                        title=dict(text="Feature type", font=dict(color="#aaa"))),
+            margin=dict(t=60, b=20, l=20, r=20), hovermode="closest")
+        return fig, plasmid_size
+
+    with st.sidebar:
+        st.header("⚙️ Parameters")
+        gb_file = st.file_uploader(
+            "Upload GenBank file",
+            type=["gb", "gbk", "genbank"],
+            help="GenBank files with feature annotations (.gb or .gbk)",
+            key="uploader_feat")
+
+        if gb_file:
+            st.divider()
+            st.subheader("Feature Filter")
+            all_types_placeholder = st.empty()
+
+    if gb_file:
+        raw = gb_file.read()
+        try:
+            record = SeqIO.read(io.StringIO(raw.decode("utf-8")), "genbank")
+        except Exception:
+            try:
+                record = SeqIO.read(io.StringIO(raw.decode("latin-1")), "genbank")
+            except Exception as e:
+                st.error(f"Could not parse GenBank file: {e}")
+                st.stop()
+
+        plasmid_size = len(record.seq)
+        plasmid_name = record.id or record.name or gb_file.name
+        st.success(f"✅ {plasmid_name} loaded ({plasmid_size:,} bp)")
+
+        feat_types = sorted(set(f.type for f in record.features if f.type != "source"))
+        feat_counts = {t: sum(1 for f in record.features if f.type == t) for t in feat_types}
+
+        with st.sidebar:
+            selected_types = all_types_placeholder.multiselect(
+                "Show feature types",
+                options=feat_types,
+                default=feat_types,
+                format_func=lambda t: f"{t} ({feat_counts[t]})")
+
+        # Filter record features
+        from Bio.SeqRecord import SeqRecord
+        from Bio.SeqFeature import SeqFeature
+        filtered = SeqRecord(record.seq, id=record.id, name=record.name,
+                              description=record.description)
+        filtered.features = [f for f in record.features
+                              if f.type == "source" or f.type in selected_types]
+
+        col_map, col_table = st.columns([1.1, 1], gap="large")
+
+        with col_map:
+            with st.spinner("Rendering map..."):
+                fig_annot, _ = draw_annotation_map(filtered)
+                st.plotly_chart(fig_annot, use_container_width=True, key="feat_map")
+
+        with col_table:
+            st.subheader(f"Features ({len(filtered.features) - 1})")
+            feat_rows = []
+            for f in filtered.features:
+                if f.type == "source":
+                    continue
+                label = (f.qualifiers.get("product", [""])[0] or
+                         f.qualifiers.get("gene", [""])[0] or
+                         f.qualifiers.get("label", [""])[0] or
+                         f.qualifiers.get("locus_tag", [""])[0] or "")
+                feat_rows.append({
+                    "Type": f.type,
+                    "Label": label,
+                    "Start": int(f.location.start) + 1,
+                    "End": int(f.location.end),
+                    "Strand": "+" if f.location.strand == 1 else "-",
+                    "Size (bp)": int(f.location.end) - int(f.location.start),
+                })
+            feat_df = pd.DataFrame(feat_rows).sort_values("Start")
+
+            # Color-code by type
+            def color_type(val):
+                c = FEATURE_COLORS.get(val, DEFAULT_COLOR)
+                return f"background-color: {c}22; color: {c}; font-weight: 600"
+
+            st.dataframe(
+                feat_df.style.applymap(color_type, subset=["Type"]),
+                use_container_width=True, hide_index=True, height=580)
+
+            # GenBank download
+            gb_out = io.StringIO()
+            SeqIO.write(record, gb_out, "genbank")
+            st.download_button(
+                "Download annotated GenBank",
+                data=gb_out.getvalue(),
+                file_name=f"{plasmid_name}_annotated.gb",
+                mime="text/plain")
+    else:
+        st.info("👈 Upload a GenBank file (.gb or .gbk) with feature annotations.")
+        st.markdown("""
+        **What this module shows:**
+        - All annotated features (CDS, promoters, terminators, primer sites, etc.) on a circular map
+        - Color-coded by feature type, with hover details for each feature
+        - Filterable feature table with start/end positions and strand orientation
+        - GenBank download of the loaded file
+
+        **Tip:** Most plasmid design tools (SnapGene, Benchling, ApE) can export GenBank files with annotations.
+        """)
