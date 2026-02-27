@@ -235,7 +235,12 @@ with st.sidebar:
         type=["fasta", "fa", "fas", "gb", "gbk", "genbank", "sbd"],
         help="Supported formats: FASTA, GenBank, SeqBuilder (.sbd)")
 
+    st.caption("💡 Without a file the tool runs in demo mode with a random 10kb plasmid.")
+
+    run = st.button("▶  Run Analysis", type="primary", use_container_width=True)
+
     st.divider()
+    st.subheader("🔧 Settings")
 
     min_frag = st.slider("Min fragment size (bp)", 100, 3000, 250, 50)
     max_frag = st.slider("Max fragment size (bp)", 1000, 50000, 8000, 500)
@@ -254,8 +259,6 @@ with st.sidebar:
     else:
         selected_enzymes = st.multiselect(
             "Enzymes:", DEFAULT_ENZYMES, default=DEFAULT_ENZYMES[:10])
-
-    run = st.button("▶  Run Analysis", type="primary", use_container_width=True)
 
 # ── MAIN AREA ──────────────────────────────────────────────────────────────────
 if run:
@@ -310,3 +313,4 @@ else:
     
     **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
+
