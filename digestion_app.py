@@ -1522,20 +1522,22 @@ elif tool == "Feature Annotation Viewer":
                 arc_fraction = abs(a1 - a0) / (2 * np.pi)
                 if arc_fraction > 0.025 or size_bp > plasmid_size * 0.025:
                     mid_a = (a0 + a1) / 2
-                    # Place label just outside the feature's own track ring
                     if strand != -1:
                         r_lbl = r_outer + 0.13
                     else:
                         r_lbl = r_inner - 0.10
+                    # Scale font size and label length with feature size
+                    lbl_size  = max(6, min(10, int(6 + arc_fraction * 40)))
+                    lbl_chars = max(6, min(20, int(arc_fraction * 120)))
                     fig.add_annotation(
                         x=r_lbl * np.cos(mid_a),
                         y=r_lbl * np.sin(mid_a),
-                        text=label[:20],
+                        text=label[:lbl_chars],
                         showarrow=False,
-                        font=dict(color=color, size=9, family="Arial"),
+                        font=dict(color=color, size=lbl_size, family="Arial"),
                         xanchor="center", yanchor="middle",
                         bgcolor="rgba(26,26,46,0.7)",
-                        borderpad=2)
+                        borderpad=1)
 
         # bp scale ticks (four cardinal points)
         for frac, pos_label in [(0, "1"), (0.25, f"{plasmid_size//4:,}"),
