@@ -99,27 +99,57 @@ DEFAULT_ENZYMES = [
     "BclI", "BssHII", "BstBI", "BstXI", "NarI", "BspHI",
 ]
 
+# DAM/DCM METHYLATION
+# dam methylase blocks: GATC (EcoRV, ClaI, XbaI, MboI, BclI, BamHI overlap)
+# dcm methylase blocks: CCWGG (EcoRII, SacII overlap)
+DAM_BLOCKED = {"MboI", "BclI", "ClaI"}          # cut only in dam- strains
+DCM_BLOCKED = {"SacII", "EcoRII"}                # cut only in dcm- strains
+# Note: partial sensitivity — BamHI, EcoRI etc are NOT blocked by dam/dcm
+
 # SEQUENCE LOADING
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 def read_sbd(raw, display_name="file"):
-    try:
-        text = raw.decode("latin-1")
-        matches = re.findall(r'[ATCGatcg]{100,}', text)
-        if not matches:
-            st.warning(f"⚠️ **{display_name}.sbd**: No DNA sequence found. "
-                       "The file may be corrupted or use an unsupported SeqBuilder version.")
-            return None
-        seq = max(matches, key=len).upper()
-        if len(matches) > 1:
-            total_found = sum(len(m) for m in matches)
-            st.warning(f"⚠️ **{display_name}.sbd**: Found {len(matches)} sequence fragments "
-                       f"({total_found:,} bp total). Using longest ({len(seq):,} bp). "
-                       "If this seems wrong, try exporting as FASTA from SeqBuilder.")
-        return seq
-    except Exception as e:
-        st.warning(f"⚠️ **{display_name}.sbd**: Parse error: {e}")
-        return None
+    """
+    Parse SeqBuilder Pro (.sbd) binary files.
+    Strategy: try multiple encodings and regex patterns to extract the longest
+    plausible DNA sequence. SeqBuilder embeds the sequence as plain ASCII in
+    the binary blob, usually after a recognisable header tag.
+    """
+    for encoding in ("latin-1", "utf-8", "cp1252"):
+        try:
+            text = raw.decode(encoding, errors="replace")
+
+            # Strategy 1: look for sequence after common SeqBuilder tags
+            for tag in ("ORIGIN", "sequence", "Sequence", "DNA"):
+                idx = text.find(tag)
+                if idx != -1:
+                    chunk = text[idx:idx + 500000]
+                    cleaned = re.sub(r'[^ATCGatcg]', '', chunk).upper()
+                    if len(cleaned) > 200:
+                        return cleaned
+
+            # Strategy 2: longest uninterrupted IUPAC DNA run (>=200 bp)
+            matches = re.findall(r'[ATCGatcgRYSWKMBDHVNrysw]{200,}', text)
+            if matches:
+                seq = max(matches, key=len).upper()
+                # Filter to strict ATCG only (remove ambiguous noise)
+                seq_strict = re.sub(r'[^ATCG]', '', seq)
+                if len(seq_strict) > 200:
+                    if len(matches) > 1:
+                        st.warning(
+                            f"⚠️ **{display_name}.sbd**: Found {len(matches)} sequence regions. "
+                            f"Using longest ({len(seq_strict):,} bp). "
+                            "For best results, export as FASTA from SeqBuilder.")
+                    return seq_strict
+
+        except Exception:
+            continue
+
+    st.warning(
+        f"⚠️ **{display_name}.sbd**: No DNA sequence could be extracted. "
+        "Please export the sequence as FASTA or GenBank from SeqBuilder Pro.")
+    return None
 
 def load_sequence(uploaded_file):
     if uploaded_file is None:
@@ -274,6 +304,8 @@ def draw_gel(results, plasmid_size, title_suffix="", lane_labels=None):
         is_thick = size in thick_bands
         height = band_height_thick if is_thick else band_height
         intensity = 0.2 + 0.75 * (size / max_marker)
+        if is_thick:
+            intensity = min(1.0, intensity * 1.35)
         fig.add_shape(type="rect",
                       x0=-lane_width, x1=lane_width,
                       y0=y - height, y1=y + height,
@@ -636,6 +668,16 @@ elif tool == "Restriction Digest Planner":
 
         st.divider()
         st.subheader("🧪 Enzyme Selection")
+
+        st.markdown("**Host strain methylation**")
+        dam_col, dcm_col = st.columns(2)
+        with dam_col:
+            dam_plus = st.checkbox("dam+", value=True, key="dam_1",
+                                   help="dam methylase blocks some enzymes at GATC sites")
+        with dcm_col:
+            dcm_plus = st.checkbox("dcm+", value=True, key="dcm_1",
+                                   help="dcm methylase blocks some enzymes at CCWGG sites")
+
         select_all = st.checkbox("Select all enzymes", value=True, key="sel_all_1")
         if select_all:
             selected_enzymes = DEFAULT_ENZYMES
@@ -643,6 +685,12 @@ elif tool == "Restriction Digest Planner":
             selected_enzymes = st.multiselect(
                 "Select enzymes available in your laboratory:",
                 DEFAULT_ENZYMES, default=DEFAULT_ENZYMES[:10], key="enz_1")
+
+        # Filter methylation-sensitive enzymes
+        if dam_plus:
+            selected_enzymes = [e for e in selected_enzymes if e not in DAM_BLOCKED]
+        if dcm_plus:
+            selected_enzymes = [e for e in selected_enzymes if e not in DCM_BLOCKED]
 
     if run:
         # Pasted sequence takes priority over file upload
@@ -765,6 +813,16 @@ elif tool == "Multi-Plasmid Comparator":
 
         st.divider()
         st.subheader("🧪 Enzyme Selection")
+
+        st.markdown("**Host strain methylation**")
+        dam_col2, dcm_col2 = st.columns(2)
+        with dam_col2:
+            dam_plus2 = st.checkbox("dam+", value=True, key="dam_2",
+                                    help="dam methylase blocks some enzymes at GATC sites")
+        with dcm_col2:
+            dcm_plus2 = st.checkbox("dcm+", value=True, key="dcm_2",
+                                    help="dcm methylase blocks some enzymes at CCWGG sites")
+
         select_all2 = st.checkbox("Select all enzymes", value=True, key="sel_all_2")
         if select_all2:
             selected_enzymes2 = DEFAULT_ENZYMES
@@ -772,6 +830,12 @@ elif tool == "Multi-Plasmid Comparator":
             selected_enzymes2 = st.multiselect(
                 "Select enzymes:", DEFAULT_ENZYMES,
                 default=DEFAULT_ENZYMES[:10], key="enz_2")
+
+        # Filter methylation-sensitive enzymes
+        if dam_plus2:
+            selected_enzymes2 = [e for e in selected_enzymes2 if e not in DAM_BLOCKED]
+        if dcm_plus2:
+            selected_enzymes2 = [e for e in selected_enzymes2 if e not in DCM_BLOCKED]
 
     if run2:
         if len(uploaded_files) < 2:
