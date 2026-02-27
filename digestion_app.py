@@ -181,18 +181,14 @@ def load_sequence(uploaded_file):
         return None, False, display_name
 
     for fmt in ["fasta", "genbank"]:
-        try:
-            record = SeqIO.read(io.StringIO(raw.decode("utf-8")), fmt)
-            rec_name = record.id if record.id and record.id != "." else display_name
-            return str(record.seq).upper(), False, rec_name
-        except:
-            pass
-        try:
-            record = SeqIO.read(io.StringIO(raw.decode("utf-16")), fmt)
-            rec_name = record.id if record.id and record.id != "." else display_name
-            return str(record.seq).upper(), False, rec_name
-        except:
-            pass
+        for enc in ["utf-8", "utf-16", "latin-1"]:
+            try:
+                text = raw.decode(enc).replace("\r\n", "\n").replace("\r", "\n")
+                record = SeqIO.read(io.StringIO(text), fmt)
+                rec_name = record.id if record.id and record.id != "." else display_name
+                return str(record.seq).upper(), False, rec_name
+            except:
+                pass
 
     for enc in ["utf-8", "utf-16", "latin-1"]:
         try:
@@ -1418,52 +1414,71 @@ elif tool == "Feature Annotation Viewer":
             if abs(a1 - a0) >= 2 * np.pi:
                 a1 = a0 - (2 * np.pi - 0.01)
 
-            # Minimum visible arc: 3° for very short features
-            min_arc = np.radians(3)
-            if abs(a1 - a0) < min_arc:
+            # Primers: override arc to fixed ~20 nt width centered on real midpoint
+            if primer_type_key(feat):
                 mid_a_ext = (a0 + a1) / 2
-                a0 = mid_a_ext + min_arc / 2
-                a1 = mid_a_ext - min_arc / 2
+                primer_arc = 2 * np.pi * (20 / plasmid_size)  # 20 nt worth of arc
+                primer_arc = max(primer_arc, np.radians(2))    # never less than 2°
+                a0 = mid_a_ext + primer_arc / 2
+                a1 = mid_a_ext - primer_arc / 2
+            else:
+                # Minimum visible arc: 3° for very short non-primer features
+                min_arc = np.radians(3)
+                if abs(a1 - a0) < min_arc:
+                    mid_a_ext = (a0 + a1) / 2
+                    a0 = mid_a_ext + min_arc / 2
+                    a1 = mid_a_ext - min_arc / 2
 
             n_pts = max(40, int(abs(a1 - a0) / (2 * np.pi) * 500) + 2)
             arc = np.linspace(a0, a1, n_pts)
 
-            # Fixed ring width — arc length is already proportional to bp position
-            ring_w = 0.10
+            # Primers: fixed thin ring on dedicated track (no overlap logic needed)
+            is_primer_feat = display_type in ("primer_bind_fwd", "primer_bind_rev", "primer_bind")
 
-            # Two concentric rings: fwd (+) outer, rev (-) inner
-            # Use track assignment to avoid overlapping features
-            if strand == -1:
-                base_r = 0.82
+            if is_primer_feat:
+                ring_w = 0.04  # always thin
+                # Fwd primers: just outside backbone, Rev primers: just inside
+                if strand == -1:
+                    r_outer = 0.70
+                    r_inner = r_outer - ring_w
+                else:
+                    r_outer = 1.14
+                    r_inner = r_outer - ring_w
             else:
-                base_r = 1.00
+                ring_w = 0.10
 
-            # Find the first free track for this feature (greedy interval scheduling)
-            def overlaps(s1, e1, s2, e2):
-                # Handle wrap-around (circular)
-                if s1 <= e1 and s2 <= e2:
-                    return not (e1 < s2 or e2 < s1)
-                return True  # conservative: assume overlap if wrap-around
+                # Two concentric rings: fwd (+) outer, rev (-) inner
+                # Use track assignment to avoid overlapping features
+                if strand == -1:
+                    base_r = 0.82
+                else:
+                    base_r = 1.00
 
-            track = 0
-            while True:
-                blocked = any(
-                    overlaps(start, end, us, ue) and ut == track
-                    for us, ue, ut in occupied_tracks
-                )
-                if not blocked:
-                    break
-                track += 1
+                # Find the first free track for this feature (greedy interval scheduling)
+                def overlaps(s1, e1, s2, e2):
+                    if s1 <= e1 and s2 <= e2:
+                        return not (e1 < s2 or e2 < s1)
+                    return True
 
-            occupied_tracks.append((start, end, track))
+                track = 0
+                while True:
+                    blocked = any(
+                        overlaps(start, end, us, ue) and ut == track
+                        for us, ue, ut in occupied_tracks
+                    )
+                    if not blocked:
+                        break
+                    track += 1
 
-            track_offset = track * (ring_w + 0.02)
-            if strand == -1:
-                r_outer = base_r - track_offset
-                r_inner = r_outer - ring_w
-            else:
-                r_outer = base_r + track_offset
-                r_inner = r_outer - ring_w
+                occupied_tracks.append((start, end, track))
+
+                track_offset = track * (ring_w + 0.02)
+                if strand == -1:
+                    r_outer = base_r - track_offset
+                    r_inner = r_outer - ring_w
+                else:
+                    r_outer = base_r + track_offset
+                    r_inner = r_outer - ring_w
 
             x_out = r_outer * np.cos(arc)
             y_out = r_outer * np.sin(arc)
@@ -1613,7 +1628,8 @@ elif tool == "Feature Annotation Viewer":
         # Try GenBank first (has annotations)
         for enc in ("utf-8", "latin-1"):
             try:
-                record = SeqIO.read(io.StringIO(raw.decode(enc)), "genbank")
+                text = raw.decode(enc).replace("\r\n", "\n").replace("\r", "\n")
+                record = SeqIO.read(io.StringIO(text), "genbank")
                 break
             except Exception:
                 pass
@@ -1622,7 +1638,8 @@ elif tool == "Feature Annotation Viewer":
         if record is None:
             for enc in ("utf-8", "latin-1"):
                 try:
-                    record = SeqIO.read(io.StringIO(raw.decode(enc)), "fasta")
+                    text = raw.decode(enc).replace("\r\n", "\n").replace("\r", "\n")
+                    record = SeqIO.read(io.StringIO(text), "fasta")
                     break
                 except Exception:
                     pass
