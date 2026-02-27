@@ -124,6 +124,7 @@ def get_fragments(plasmid_seq, enzymes, plasmid_size):
     return sorted(fragments)
 
 def score_combination(fragments, min_frag, max_frag, min_frags, max_frags, min_diff):
+    """Score how evenly bands are distributed — in log space (gel-physical)."""
     n = len(fragments)
     if n < min_frags or n > max_frags:
         return None
@@ -135,7 +136,9 @@ def score_combination(fragments, min_frag, max_frag, min_frags, max_frags, min_d
         ratio = (fragments[i+1] - fragments[i]) / fragments[i+1]
         if ratio < min_diff:
             return None
-    return np.std(fragments) / np.mean(fragments)
+    # Log-space CV: reflects visual band spacing on gel
+    log_frags = np.log10(fragments)
+    return np.std(log_frags) / np.mean(log_frags)
 
 def find_best_digests(plasmid_sequence, selected_enzymes,
                       min_frag, max_frag, min_frags, max_frags,
@@ -305,8 +308,6 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
                   "#a6d854", "#ffd92f", "#e5c494", "#b3b3b3", "#ff6b6b", "#4ecdc4"]
 
     # Position 1 = top (12 o'clock), clockwise
-    # Plotly sin/cos: angle=0 → right, positive = counter-clockwise
-    # So we negate to get clockwise, and start at +π/2 (top)
     def pos_to_angle(pos):
         return np.pi / 2 - 2 * np.pi * (pos - 1) / plasmid_size
 
@@ -318,7 +319,6 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
         line=dict(color="#555577", width=12),
         hoverinfo="skip", showlegend=False))
 
-    # Collect all cut positions, compute arc segments
     all_cuts = sorted(set(
         site for sites in cutting.values() for site in sites
     ))
@@ -337,7 +337,6 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
             a0 = pos_to_angle(start)
             a1 = pos_to_angle(end)
 
-            # Clockwise: a1 should be < a0; if not, subtract 2π
             if a1 >= a0:
                 a1 -= 2 * np.pi
 
@@ -356,11 +355,11 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
                 y=np.concatenate([y_outer, y_inner]),
                 fill="toself", fillcolor=seg_color,
                 line=dict(width=0), mode="lines",
-                 text=f"<b>Fragment {idx+1}</b><br>Size: <b>{frag_size} bp</b><br>From: {start} bp → {all_cuts[(idx+1) % n_cuts]} bp",
+                text=f"<b>Fragment {idx+1}</b><br>Size: <b>{frag_size} bp</b><br>From: {start} bp → {all_cuts[(idx+1) % n_cuts]} bp",
                 hoverinfo="text",
                 hoveron="fills",
                 showlegend=False, opacity=0.6))
-    # Cut site markers and labels
+
     for enz_idx, (enz_name, sites) in enumerate(cutting.items()):
         color = enz_colors[enz_idx % len(enz_colors)]
         for site in sites:
@@ -389,14 +388,11 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
             marker=dict(size=10, color=color, symbol="square"),
             name=f"{enz_name} ({len(sites)}×)", showlegend=True))
 
-    # Position 1 marker at top
     fig.add_annotation(x=0, y=1.10, text="<b>1</b>",
                        showarrow=False, font=dict(color="#ffffff", size=11),
                        xanchor="center", yanchor="bottom")
     fig.add_shape(type="line", x0=0, y0=0.96, x1=0, y1=1.06,
                   line=dict(color="#ffffff", width=1.5, dash="dot"))
-
-    # Center labels
     fig.add_annotation(x=0, y=0.12, text=f"<b>{plasmid_name}</b>",
                        showarrow=False,
                        font=dict(color="white", size=13, family="Arial Black"),
@@ -417,6 +413,7 @@ def draw_plasmid_map(plasmid_seq, plasmid_size, plasmid_name, enzyme_list):
                     bgcolor="#2a2a4a", bordercolor="#555", borderwidth=1),
         margin=dict(t=60, b=20, l=20, r=20), hovermode="closest")
     return fig
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TOOL 1 — RESTRICTION DIGEST PLANNER
@@ -510,7 +507,6 @@ if tool == "Restriction Digest Planner":
                                title_suffix=f" — {plasmid_name} — min {min_f} bands")
                 st.plotly_chart(fig, use_container_width=True)
 
-              # Plasmid map for top result
                 with st.expander("🗺️ Show plasmid restriction map for top result"):
                     top_enzymes = best[0]["enzyme_list"]
                     fig_map = draw_plasmid_map(
@@ -601,11 +597,9 @@ elif tool == "Multi-Plasmid Comparator":
         for d in cut_data.values():
             all_cutting.update(d.keys())
 
-        # ── FIX: Discriminating = cuts differently in any plasmid
-        # (different count OR present in some but not all)
+        # Discriminating = absent in some plasmids OR different cut count
         discriminating = []
-        universal_same = []   # cuts same number of times in all plasmids
-        universal_diff = []   # cuts in all plasmids but different number of times
+        universal_same = []
 
         for enz in all_cutting:
             counts = []
@@ -614,15 +608,9 @@ elif tool == "Multi-Plasmid Comparator":
                     counts.append(len(cut_data[p["name"]][enz]))
                 else:
                     counts.append(0)
-
             cuts_in_all = all(c > 0 for c in counts)
             all_same_count = len(set(counts)) == 1
-
-            if not cuts_in_all:
-                # Absent in at least one plasmid → strongly discriminating
-                discriminating.append(enz)
-            elif not all_same_count:
-                # Present in all but different number of cuts → also discriminating
+            if not cuts_in_all or not all_same_count:
                 discriminating.append(enz)
             else:
                 universal_same.append(enz)
@@ -644,7 +632,6 @@ elif tool == "Multi-Plasmid Comparator":
                           if all(e in cut_data[p["name"]] for p in plasmids)]
             st.write(", ".join(sorted(count_disc)) if count_disc else "None")
 
-        # Summary line
         if not discriminating:
             st.info("All enzymes produce identical patterns across all plasmids.")
         else:
@@ -664,7 +651,6 @@ elif tool == "Multi-Plasmid Comparator":
         matrix_df = pd.DataFrame(matrix_data).T
         matrix_df.index.name = "Enzyme"
 
-        # Highlight discriminating enzymes
         def highlight_discriminating(row):
             enz = row.name
             if enz in discriminating:
@@ -688,7 +674,6 @@ elif tool == "Multi-Plasmid Comparator":
         for size in range(1, combo_max2 + 1):
             for combo in combinations(all_for_combo, size):
                 combo_names = [e.__name__ for e in combo]
-                # Must include at least one discriminating enzyme
                 if not any(e in discriminating for e in combo_names):
                     continue
 
@@ -706,9 +691,7 @@ elif tool == "Multi-Plasmid Comparator":
                 if not valid:
                     continue
 
-                # Score: how different are the fragment patterns?
-                # Uses Hungarian algorithm for optimal fragment matching —
-                # avoids positional bias when band counts differ or sizes are close.
+                # Gel-physical discrimination score: log-space Hungarian matching
                 diff_score = 0
                 for i in range(len(frag_sets)):
                     for j in range(i+1, len(frag_sets)):
@@ -716,26 +699,21 @@ elif tool == "Multi-Plasmid Comparator":
                         fb = sorted(frag_sets[j])
                         na, nb = len(fa), len(fb)
                         if na != nb:
-                            # Different band count → strong discriminating signal.
-                            # Pad shorter set with 0 so Hungarian can still run on
-                            # a square cost matrix; unmatched bands get cost 1.0.
                             n = max(na, nb)
                             fa_pad = fa + [0] * (n - na)
                             fb_pad = fb + [0] * (n - nb)
                             cost = np.array([
-                                [abs(a - b) / max(a, b, 1) if (a > 0 and b > 0) else 1.0
+                                [abs(np.log10(max(a, 1)) - np.log10(max(b, 1))) if (a > 0 and b > 0) else np.log10(max(max(fa), max(fb), 1))
                                  for b in fb_pad]
                                 for a in fa_pad
                             ])
                             row_ind, col_ind = linear_sum_assignment(cost)
                             matched = cost[row_ind, col_ind].sum()
-                            # Extra bonus for each unmatched band (clear gel difference)
                             unmatched_penalty = abs(na - nb) * 1.5
                             diff_score += matched + unmatched_penalty
                         else:
-                            # Same band count → optimal matching via Hungarian
                             cost = np.array([
-                                [abs(a - b) / max(a, b) for b in fb]
+                                [abs(np.log10(a) - np.log10(b)) for b in fb]
                                 for a in fa
                             ])
                             row_ind, col_ind = linear_sum_assignment(cost)
@@ -757,7 +735,6 @@ elif tool == "Multi-Plasmid Comparator":
                 "Try relaxing: lower minimum band count, increase max fragment size, "
                 "or reduce the minimum size difference between bands."
             )
-            # Show best available even if they don't meet all criteria, for guidance
             if discriminating:
                 st.info(
                     f"Discriminating enzymes found: **{', '.join(sorted(discriminating))}** — "
@@ -794,7 +771,6 @@ elif tool == "Multi-Plasmid Comparator":
                                lane_labels=lane_labels)
                 st.plotly_chart(fig, use_container_width=True)
 
-               # Plasmid map per plasmid for this combo
                 with st.expander(f"🗺️ Show restriction maps for this digest combination"):
                     map_cols = st.columns(len(plasmids))
                     for j, p in enumerate(plasmids):
@@ -817,10 +793,3 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
-
-
-
-
-
-
-
