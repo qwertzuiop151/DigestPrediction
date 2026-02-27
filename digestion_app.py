@@ -23,7 +23,7 @@ st.markdown("""
 <style>
     section[data-testid="stSidebar"] {
         width: 700px !important;
-        min-width: 300px !important;
+        min-width: 0px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -377,6 +377,7 @@ else:
     - Use *Prioritise short fragments* if gel run time is a concern
     - Enzymes not present in the uploaded sequence are automatically excluded
     """)
+
 
 
 
