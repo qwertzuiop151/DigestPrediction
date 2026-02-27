@@ -1837,49 +1837,72 @@ elif tool == "Feature Annotation Viewer":
 
                     # Sequence viewer below the linear map
                     st.divider()
-                    st.markdown("**Sequence**")
+                    sv1, sv2 = st.columns([3, 1])
+                    with sv1:
+                        st.markdown("**Sequence**")
+                    with sv2:
+                        nt_per_line = st.select_slider(
+                            "nt / line", options=[20, 30, 40, 50, 60, 80, 100, 120],
+                            value=60, key="nt_per_line")
+
                     seq_str = str(record.seq)
                     region_seq = seq_str[lin_start - 1: lin_end]
-                    # Read-only display: 60 nt/line with positions
-                    lines_disp = []
-                    for i in range(0, len(region_seq), 60):
-                        pos = lin_start + i
-                        chunk = region_seq[i:i+60]
-                        spaced = " ".join(chunk[j:j+10] for j in range(0, len(chunk), 10))
-                        lines_disp.append(f"{pos:>8}  {spaced}")
-                    st.code("\n".join(lines_disp), language=None)
 
-                    # Features in region
+                    # Features in region — build per-position lookup for annotations
                     region_feats_seq = [f for f in filtered.features
                         if f.type != "source"
                         and int(f.location.start) < lin_end
                         and int(f.location.end) > lin_start - 1]
-                    if region_feats_seq:
-                        st.caption("Features: " + ", ".join(
-                            f"{get_label(f)} ({int(f.location.start)+1}–{int(f.location.end)})"
-                            for f in region_feats_seq))
 
-                    # Edit
-                    with st.expander("✏️ Edit sequence in this region"):
-                        edited = st.text_area("Sequence (ATCG only — editing replaces this region)",
-                            value=region_seq, height=100, key="seq_edit")
-                        if st.button("Apply & download modified GenBank", key="apply_edit"):
-                            edited_clean = re.sub(r"[^ATCGatcg]", "", edited).upper()
-                            new_full = seq_str[:lin_start-1] + edited_clean + seq_str[lin_end:]
-                            from Bio.Seq import Seq as _Seq
-                            new_record = record.__class__(
-                                _Seq(new_full), id=record.id, name=record.name,
-                                description=record.description,
-                                features=record.features, annotations=record.annotations)
-                            gb_edit = io.StringIO()
-                            SeqIO.write(new_record, gb_edit, "genbank")
-                            st.download_button(
-                                "Download modified GenBank",
-                                data=gb_edit.getvalue(),
-                                file_name=f"{plasmid_name}_edited.gb",
-                                mime="text/plain", key="dl_edited")
-                            st.success(f"Region {lin_start}–{lin_end} updated "
-                                       f"({len(region_seq)} → {len(edited_clean)} bp).")
+                    # Edit window — live: use edited text if present, else original
+                    edited = st.text_area(
+                        "✏️ Edit sequence (ATCG only — changes reflected live above)",
+                        value=region_seq, height=90, key="seq_edit")
+                    edited_clean = re.sub(r"[^ATCGatcg]", "", edited).upper() if edited else region_seq
+                    live_seq = edited_clean if edited_clean else region_seq
+
+                    # Render read-only view with feature annotations above each line
+                    lines_out = []
+                    for i in range(0, len(live_seq), nt_per_line):
+                        pos = lin_start + i
+                        chunk = live_seq[i:i+nt_per_line]
+                        chunk_end = pos + len(chunk) - 1
+
+                        # Feature labels that overlap this line
+                        feat_labels = []
+                        for f in region_feats_seq:
+                            fs = int(f.location.start) + 1
+                            fe = int(f.location.end)
+                            if fs <= chunk_end and fe >= pos:
+                                lbl = get_label(f)
+                                strand_sym = "+" if f.location.strand == 1 else "-"
+                                feat_labels.append(f"{lbl}({strand_sym})")
+                        if feat_labels:
+                            # Ruler line showing feature span within this chunk
+                            feat_line = " ".join(feat_labels)
+                            lines_out.append(f"          {feat_line}")
+
+                        spaced = " ".join(chunk[j:j+10] for j in range(0, len(chunk), 10))
+                        lines_out.append(f"{pos:>8}  {spaced}")
+
+                    st.code("\n".join(lines_out), language=None)
+
+                    if st.button("Apply & download modified GenBank", key="apply_edit"):
+                        new_full = seq_str[:lin_start-1] + edited_clean + seq_str[lin_end:]
+                        from Bio.Seq import Seq as _Seq
+                        new_record = record.__class__(
+                            _Seq(new_full), id=record.id, name=record.name,
+                            description=record.description,
+                            features=record.features, annotations=record.annotations)
+                        gb_edit = io.StringIO()
+                        SeqIO.write(new_record, gb_edit, "genbank")
+                        st.download_button(
+                            "Download modified GenBank",
+                            data=gb_edit.getvalue(),
+                            file_name=f"{plasmid_name}_edited.gb",
+                            mime="text/plain", key="dl_edited")
+                        st.success(f"Region {lin_start}–{lin_end} updated "
+                                   f"({len(region_seq)} → {len(edited_clean)} bp).")
                 else:
                     st.warning("From must be less than To.")
 
