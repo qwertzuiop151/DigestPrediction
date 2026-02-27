@@ -8,6 +8,7 @@ import re
 import random
 import io
 import pandas as pd
+from scipy.optimize import linear_sum_assignment
 
 # ── PAGE SETTINGS ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -628,10 +629,10 @@ elif tool == "Multi-Plasmid Comparator":
         st.divider()
         st.subheader("🔧 Analysis Settings")
         min_frag2 = st.slider("Minimum fragment size (bp)", 100, 3000, 250, 50, key="mf2")
-        max_frag2 = st.slider("Maximum fragment size (bp)", 1000, 50000, 12000, 500, key="xf2")
-        min_frags2 = st.slider("Minimum number of bands (n)", 1, 8, 1, key="mfr2")
+        max_frag2 = st.slider("Maximum fragment size (bp)", 1000, 50000, 8000, 500, key="xf2")
+        min_frags2 = st.slider("Minimum number of bands (n)", 1, 8, 3, key="mfr2")
         max_frags2 = st.slider("Maximum number of bands", 2, 10, 6, key="xfr2")
-        min_diff2 = st.slider("Minimum relative size difference", 0.05, 0.5, 0.05, 0.05, key="md2")
+        min_diff2 = st.slider("Minimum relative size difference", 0.05, 0.5, 0.15, 0.05, key="md2")
         combo_max2 = st.slider("Maximum enzymes per digest", 1, 3, 2,
                                help="⚠️ Setting this to 3 significantly increases computation time",
                                key="cm2")
@@ -781,17 +782,39 @@ elif tool == "Multi-Plasmid Comparator":
                     continue
 
                 # Score: how different are the fragment patterns?
+                # Uses Hungarian algorithm for optimal fragment matching —
+                # avoids positional bias when band counts differ or sizes are close.
                 diff_score = 0
                 for i in range(len(frag_sets)):
                     for j in range(i+1, len(frag_sets)):
-                        if len(frag_sets[i]) != len(frag_sets[j]):
-                            # Different number of bands → big bonus
-                            diff_score += 2 + abs(len(frag_sets[i]) - len(frag_sets[j]))
+                        fa = sorted(frag_sets[i])
+                        fb = sorted(frag_sets[j])
+                        na, nb = len(fa), len(fb)
+                        if na != nb:
+                            # Different band count → strong discriminating signal.
+                            # Pad shorter set with 0 so Hungarian can still run on
+                            # a square cost matrix; unmatched bands get cost 1.0.
+                            n = max(na, nb)
+                            fa_pad = fa + [0] * (n - na)
+                            fb_pad = fb + [0] * (n - nb)
+                            cost = np.array([
+                                [abs(a - b) / max(a, b, 1) if (a > 0 and b > 0) else 1.0
+                                 for b in fb_pad]
+                                for a in fa_pad
+                            ])
+                            row_ind, col_ind = linear_sum_assignment(cost)
+                            matched = cost[row_ind, col_ind].sum()
+                            # Extra bonus for each unmatched band (clear gel difference)
+                            unmatched_penalty = abs(na - nb) * 1.5
+                            diff_score += matched + unmatched_penalty
                         else:
-                            # Same band count → score by size differences
-                            diffs = [abs(a-b) / max(a, b)
-                                     for a, b in zip(sorted(frag_sets[i]), sorted(frag_sets[j]))]
-                            diff_score += sum(diffs)
+                            # Same band count → optimal matching via Hungarian
+                            cost = np.array([
+                                [abs(a - b) / max(a, b) for b in fb]
+                                for a in fa
+                            ])
+                            row_ind, col_ind = linear_sum_assignment(cost)
+                            diff_score += cost[row_ind, col_ind].sum()
 
                 combo_scores.append({
                     "enzymes": " + ".join(combo_names),
@@ -869,6 +892,3 @@ elif tool == "Multi-Plasmid Comparator":
 
         **Use case:** Verify correct construct after cloning by comparing expected vs. actual digest pattern.
         """)
-
-
-
