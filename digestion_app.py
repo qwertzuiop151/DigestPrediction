@@ -1806,126 +1806,106 @@ elif tool == "Feature Annotation Viewer":
                 hovermode="closest", dragmode="pan")
             return fig_lin
 
-        # ── tabs: circular | linear | sequence ──────────────────────────────
-        tab_circ, tab_lin, tab_seq = st.tabs(
-            ["🔵 Circular Map", "➖ Linear Map", "🔤 Sequence"])
+        # ── view toggle: circular vs linear ────────────────────────────────────
+        view_mode = st.radio("View", ["🔵 Circular", "➖ Linear"],
+            horizontal=True, key="feat_view_mode", label_visibility="collapsed")
 
-        with tab_circ:
-            col_map, col_table = st.columns([1.15, 1], gap="large")
-            with col_map:
+        col_map, col_table = st.columns([1.15, 1], gap="large")
+
+        with col_map:
+            if view_mode == "🔵 Circular":
                 with st.spinner("Rendering map..."):
                     fig_annot, _ = draw_annotation_map(filtered, show_labels=show_labels)
                     st.plotly_chart(fig_annot, use_container_width=True, key="feat_map")
+            else:
+                st.markdown(f"**Linear view  —  {plasmid_name}  {plasmid_size:,} bp**")
+                lc1, lc2 = st.columns(2)
+                with lc1:
+                    lin_start = st.number_input("From (bp)", min_value=1,
+                        max_value=plasmid_size, value=1, step=50, key="lin_start")
+                with lc2:
+                    lin_end = st.number_input("To (bp)", min_value=1,
+                        max_value=plasmid_size, value=plasmid_size, step=50, key="lin_end")
+                if lin_start < lin_end:
+                    region_feats_lin = [f for f in filtered.features
+                        if f.type != "source"
+                        and int(f.location.start) < lin_end
+                        and int(f.location.end) > lin_start]
+                    st.plotly_chart(
+                        draw_linear_map(region_feats_lin, lin_start, lin_end),
+                        use_container_width=True, key="linear_full")
 
-            with col_table:
-                n_feats = len(feat_df) if not feat_df.empty else 0
-                st.subheader(f"Features ({n_feats})")
-                search = st.text_input("Search features",
-                    placeholder="Gene name, type, position...", key="feat_search")
-                if search and not feat_df.empty:
-                    mask = feat_df.apply(
-                        lambda row: search.lower() in str(row).lower(), axis=1)
-                    feat_df = feat_df[mask]
-                    st.caption(f'{len(feat_df)} match(es) for "{search}"')
-                if not feat_df.empty:
-                    def color_type(val):
-                        c = FEATURE_COLORS.get(val, DEFAULT_COLOR)
-                        return f"background-color: {c}22; color: {c}; font-weight: 600"
-                    st.dataframe(
-                        feat_df.style.applymap(color_type, subset=["Type"]),
-                        use_container_width=True, hide_index=True, height=500)
+                    # Sequence viewer below the linear map
+                    st.divider()
+                    st.markdown("**Sequence**")
+                    seq_str = str(record.seq)
+                    region_seq = seq_str[lin_start - 1: lin_end]
+                    # Read-only display: 60 nt/line with positions
+                    lines_disp = []
+                    for i in range(0, len(region_seq), 60):
+                        pos = lin_start + i
+                        chunk = region_seq[i:i+60]
+                        spaced = " ".join(chunk[j:j+10] for j in range(0, len(chunk), 10))
+                        lines_disp.append(f"{pos:>8}  {spaced}")
+                    st.code("\n".join(lines_disp), language=None)
+
+                    # Features in region
+                    region_feats_seq = [f for f in filtered.features
+                        if f.type != "source"
+                        and int(f.location.start) < lin_end
+                        and int(f.location.end) > lin_start - 1]
+                    if region_feats_seq:
+                        st.caption("Features: " + ", ".join(
+                            f"{get_label(f)} ({int(f.location.start)+1}–{int(f.location.end)})"
+                            for f in region_feats_seq))
+
+                    # Edit
+                    with st.expander("✏️ Edit sequence in this region"):
+                        edited = st.text_area("Sequence (ATCG only — editing replaces this region)",
+                            value=region_seq, height=100, key="seq_edit")
+                        if st.button("Apply & download modified GenBank", key="apply_edit"):
+                            edited_clean = re.sub(r"[^ATCGatcg]", "", edited).upper()
+                            new_full = seq_str[:lin_start-1] + edited_clean + seq_str[lin_end:]
+                            from Bio.Seq import Seq as _Seq
+                            new_record = record.__class__(
+                                _Seq(new_full), id=record.id, name=record.name,
+                                description=record.description,
+                                features=record.features, annotations=record.annotations)
+                            gb_edit = io.StringIO()
+                            SeqIO.write(new_record, gb_edit, "genbank")
+                            st.download_button(
+                                "Download modified GenBank",
+                                data=gb_edit.getvalue(),
+                                file_name=f"{plasmid_name}_edited.gb",
+                                mime="text/plain", key="dl_edited")
+                            st.success(f"Region {lin_start}–{lin_end} updated "
+                                       f"({len(region_seq)} → {len(edited_clean)} bp).")
                 else:
-                    st.caption("No features to display.")
-                gb_out = io.StringIO()
-                SeqIO.write(record, gb_out, "genbank")
-                st.download_button("Download GenBank", data=gb_out.getvalue(),
-                    file_name=f"{plasmid_name}.gb", mime="text/plain")
+                    st.warning("From must be less than To.")
 
-        with tab_lin:
-            st.markdown(f"**{plasmid_name}  —  {plasmid_size:,} bp  (linear view)**")
-            # Region selector
-            lc1, lc2 = st.columns(2)
-            with lc1:
-                lin_start = st.number_input("From (bp)", min_value=1,
-                    max_value=plasmid_size, value=1, step=50, key="lin_start")
-            with lc2:
-                lin_end = st.number_input("To (bp)", min_value=1,
-                    max_value=plasmid_size, value=plasmid_size, step=50, key="lin_end")
-            if lin_start < lin_end:
-                region_feats_lin = [f for f in filtered.features
-                    if f.type != "source"
-                    and int(f.location.start) < lin_end
-                    and int(f.location.end) > lin_start]
-                st.plotly_chart(
-                    draw_linear_map(region_feats_lin, lin_start, lin_end),
-                    use_container_width=True, key="linear_full")
+        with col_table:
+            n_feats = len(feat_df) if not feat_df.empty else 0
+            st.subheader(f"Features ({n_feats})")
+            search = st.text_input("Search features",
+                placeholder="Gene name, type, position...", key="feat_search")
+            if search and not feat_df.empty:
+                mask = feat_df.apply(
+                    lambda row: search.lower() in str(row).lower(), axis=1)
+                feat_df = feat_df[mask]
+                st.caption(f'{len(feat_df)} match(es) for "{search}"')
+            if not feat_df.empty:
+                def color_type(val):
+                    c = FEATURE_COLORS.get(val, DEFAULT_COLOR)
+                    return f"background-color: {c}22; color: {c}; font-weight: 600"
+                st.dataframe(
+                    feat_df.style.applymap(color_type, subset=["Type"]),
+                    use_container_width=True, hide_index=True, height=500)
             else:
-                st.warning("Start must be less than End.")
-
-        with tab_seq:
-            st.markdown(f"**Sequence viewer  —  {plasmid_size:,} bp**")
-            sc1, sc2 = st.columns(2)
-            with sc1:
-                seq_from = st.number_input("From (bp)", min_value=1,
-                    max_value=plasmid_size, value=1, step=10, key="seq_from")
-            with sc2:
-                seq_to = st.number_input("To (bp)", min_value=1,
-                    max_value=plasmid_size, value=min(200, plasmid_size),
-                    step=10, key="seq_to")
-
-            seq_str = str(record.seq)
-
-            if seq_from <= seq_to:
-                region_seq = seq_str[seq_from - 1: seq_to]
-
-                # Display with position numbers, 60 nt per line
-                lines = []
-                for i in range(0, len(region_seq), 60):
-                    pos = seq_from + i
-                    chunk = region_seq[i:i+60]
-                    spaced = " ".join(chunk[j:j+10] for j in range(0, len(chunk), 10))
-                    lines.append(f"{pos:>8}  {spaced}")
-                seq_display = "\n".join(lines)
-
-                st.code(seq_display, language=None)
-
-                # Features overlapping this region
-                region_feats_seq = [f for f in filtered.features
-                    if f.type != "source"
-                    and int(f.location.start) < seq_to
-                    and int(f.location.end) > seq_from - 1]
-                if region_feats_seq:
-                    st.caption("Features in this region: " +
-                        ", ".join(f"{get_label(f)} ({int(f.location.start)+1}–{int(f.location.end)})"
-                                  for f in region_feats_seq))
-
-                # Edit region
-                with st.expander("✏️ Edit this region"):
-                    st.warning("Editing replaces the sequence in this region. "
-                               "Download the modified GenBank after saving.")
-                    edited = st.text_area("Edit sequence (ATCG only)",
-                        value=region_seq, height=120, key="seq_edit")
-                    if st.button("Apply edit & update GenBank", key="apply_edit"):
-                        edited_clean = re.sub(r"[^ATCGatcg]", "", edited).upper()
-                        new_seq = seq_str[:seq_from-1] + edited_clean + seq_str[seq_to:]
-                        from Bio.Seq import Seq as _Seq
-                        from Bio.SeqRecord import SeqRecord as _SR
-                        new_record = record.__class__(
-                            _Seq(new_seq), id=record.id, name=record.name,
-                            description=record.description,
-                            features=record.features, annotations=record.annotations)
-                        gb_edit = io.StringIO()
-                        SeqIO.write(new_record, gb_edit, "genbank")
-                        st.download_button(
-                            "Download modified GenBank",
-                            data=gb_edit.getvalue(),
-                            file_name=f"{plasmid_name}_edited.gb",
-                            mime="text/plain",
-                            key="dl_edited")
-                        st.success(f"Region {seq_from}–{seq_to} replaced "
-                                   f"({len(region_seq)} → {len(edited_clean)} bp).")
-            else:
-                st.warning("From must be ≤ To.")
+                st.caption("No features to display.")
+            gb_out = io.StringIO()
+            SeqIO.write(record, gb_out, "genbank")
+            st.download_button("Download GenBank", data=gb_out.getvalue(),
+                file_name=f"{plasmid_name}.gb", mime="text/plain")
     else:
         st.info("👈 Upload a GenBank file (.gb or .gbk) with feature annotations.")
         st.markdown("""
