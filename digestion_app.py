@@ -1326,6 +1326,21 @@ elif tool == "Feature Annotation Viewer":
                 feat.qualifiers.get("locus_tag",[""])[0] or
                 feat.type)
 
+    PRIMER_KEYWORDS = re.compile(
+        r"primer|oligo|probe|oJW|oSB|oHH|oAB|oMB|oCW|^o[A-Z]{2}[0-9]|"
+        r"fwd|rev|forward|reverse|^F_|^R_|_F$|_R$|_fwd|_rev",
+        re.IGNORECASE)
+
+    def is_primer(feat):
+        """Return True if feature looks like a primer by type or name."""
+        if feat.type == "primer_bind":
+            return True
+        if feat.type in ("misc_feature", "misc_binding"):
+            lbl = get_label(feat)
+            if PRIMER_KEYWORDS.search(lbl):
+                return True
+        return False
+
     def draw_annotation_map(record, show_labels=True, zoom_start=None, zoom_end=None):
         plasmid_size = len(record.seq)
         plasmid_name = record.id or record.name or "Plasmid"
@@ -1360,7 +1375,9 @@ elif tool == "Feature Annotation Viewer":
         for feat in record.features:
             if feat.type in ("source",):
                 continue
-            color = FEATURE_COLORS.get(feat.type, DEFAULT_COLOR)
+            # Detect primers by type or name before color lookup
+            display_type = "primer_bind" if is_primer(feat) else feat.type
+            color = FEATURE_COLORS.get(display_type, DEFAULT_COLOR)
             start  = int(feat.location.start) + 1
             end    = int(feat.location.end)
             strand = feat.location.strand
@@ -1400,7 +1417,7 @@ elif tool == "Feature Annotation Viewer":
                         r_outer * np.sin(tip_a)]
 
             hover = (f"<b>{label}</b><br>"
-                     f"Type: {feat.type}<br>"
+                     f"Type: {display_type}<br>"
                      f"Position: {start:,} – {end:,} bp<br>"
                      f"Strand: {'(+) forward' if strand == 1 else '(-) reverse'}<br>"
                      f"Size: {size_bp:,} bp")
@@ -1412,11 +1429,11 @@ elif tool == "Feature Annotation Viewer":
                 fill="toself", fillcolor=color,
                 line=dict(width=0, color=color), mode="lines",
                 text=hover, hoverinfo="text", hoveron="fills",
-                showlegend=feat.type not in seen_types,
-                name=feat.type,
-                legendgroup=feat.type,
+                showlegend=display_type not in seen_types,
+                name=display_type,
+                legendgroup=display_type,
                 opacity=0.88))
-            seen_types[feat.type] = True
+            seen_types[display_type] = True
 
             # Arrow head
             fig.add_trace(go.Scatter(
@@ -1584,7 +1601,7 @@ elif tool == "Feature Annotation Viewer":
             if f.type == "source":
                 continue
             feat_rows.append({
-                "Type": f.type,
+                "Type": "primer_bind" if is_primer(f) else f.type,
                 "Label": get_label(f),
                 "Start": int(f.location.start) + 1,
                 "End": int(f.location.end),
