@@ -56,14 +56,25 @@ DEFAULT_ENZYMES = [
 ]
 
 # ── SEQUENCE LOADING ───────────────────────────────────────────────────────────
-def read_sbd(raw):
+MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+def read_sbd(raw, display_name="file"):
     try:
         text = raw.decode("latin-1")
         matches = re.findall(r'[ATCGatcg]{100,}', text)
         if not matches:
+            st.warning(f"⚠️ **{display_name}.sbd**: No DNA sequence found. "
+                       "The file may be corrupted or use an unsupported SeqBuilder version.")
             return None
-        return max(matches, key=len).upper()
-    except:
+        seq = max(matches, key=len).upper()
+        if len(matches) > 1:
+            total_found = sum(len(m) for m in matches)
+            st.warning(f"⚠️ **{display_name}.sbd**: Found {len(matches)} sequence fragments "
+                       f"({total_found:,} bp total). Using longest ({len(seq):,} bp). "
+                       "If this seems wrong, try exporting as FASTA from SeqBuilder.")
+        return seq
+    except Exception as e:
+        st.warning(f"⚠️ **{display_name}.sbd**: Failed to parse — {e}")
         return None
 
 def load_sequence(uploaded_file):
@@ -75,10 +86,18 @@ def load_sequence(uploaded_file):
     name = uploaded_file.name.lower()
     display_name = uploaded_file.name.rsplit(".", 1)[0]
 
+    # ── File size check (5 MB max) ──
+    if len(raw) > MAX_FILE_SIZE_BYTES:
+        st.error(f"❌ **{uploaded_file.name}** is too large "
+                 f"({len(raw)/1024/1024:.1f} MB). Maximum allowed size is 5 MB. "
+                 "For large sequences, export only the relevant region as FASTA.")
+        return None, False, display_name
+
     if name.endswith(".sbd"):
-        seq = read_sbd(raw)
+        seq = read_sbd(raw, display_name)
         if seq:
             return seq, False, display_name
+        return None, False, display_name
 
     for fmt in ["fasta", "genbank"]:
         try:
@@ -106,9 +125,11 @@ def load_sequence(uploaded_file):
     return None, False, display_name
 
 # ── ANALYSIS FUNCTIONS ─────────────────────────────────────────────────────────
-def get_fragments(plasmid_seq, enzymes, plasmid_size):
+@st.cache_data(show_spinner=False)
+def get_fragments(plasmid_seq, enzyme_names, plasmid_size):
     if not isinstance(plasmid_seq, Seq):
         plasmid_seq = Seq(str(plasmid_seq).upper())
+    enzymes = [getattr(Restriction, e) for e in enzyme_names if hasattr(Restriction, e)]
     rb = Restriction.RestrictionBatch(enzymes)
     cut_sites = []
     for enz, sites in rb.search(plasmid_seq, linear=False).items():
@@ -140,6 +161,7 @@ def score_combination(fragments, min_frag, max_frag, min_frags, max_frags, min_d
     log_frags = np.log10(fragments)
     return np.std(log_frags) / np.mean(log_frags)
 
+@st.cache_data(show_spinner=False)
 def find_best_digests(plasmid_sequence, selected_enzymes,
                       min_frag, max_frag, min_frags, max_frags,
                       min_diff, combo_size, top_n, prefer_short=False):
@@ -153,7 +175,7 @@ def find_best_digests(plasmid_sequence, selected_enzymes,
     results = []
     for size in range(combo_size[0], combo_size[1] + 1):
         for combo in combinations(cutting_enzymes, size):
-            frags = get_fragments(plasmid_seq, list(combo), plasmid_size)
+            frags = get_fragments(str(plasmid_seq), tuple(e.__name__ for e in combo), plasmid_size)
             if not frags:
                 continue
             score = score_combination(frags, min_frag, max_frag,
@@ -483,7 +505,7 @@ if tool == "Restriction Digest Planner":
 
             with st.spinner(f"Searching for optimal enzyme combinations yielding at least {min_f} bands..."):
                 best, cutting = find_best_digests(
-                    plasmid_seq, selected_enzymes,
+                    plasmid_seq, tuple(selected_enzymes),
                     min_frag, max_frag, min_f, max_frags,
                     min_diff, (combo_min, combo_max), top_n,
                     prefer_short=prefer_short)
@@ -680,7 +702,7 @@ elif tool == "Multi-Plasmid Comparator":
                 frag_sets = []
                 valid = True
                 for p in plasmids:
-                    frags = get_fragments(p["seq"], list(combo), p["size"])
+                    frags = get_fragments(p["seq"], tuple(e.__name__ for e in combo), p["size"])
                     s = score_combination(frags, min_frag2, max_frag2,
                                           min_frags2, max_frags2, min_diff2)
                     if s is None:
