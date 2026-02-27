@@ -21,12 +21,9 @@ st.markdown("Automatically identifies optimal enzyme combinations for diagnostic
 
 st.markdown("""
 <style>
-    [data-testid="collapsedControl"] {
-        display: none;
-    }
     section[data-testid="stSidebar"] {
-        width: 700px !important;
-        min-width: 700px !important;
+        width: 350px !important;
+        min-width: 350px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -380,6 +377,7 @@ else:
     - Use *Prioritise short fragments* if gel run time is a concern
     - Enzymes not present in the uploaded sequence are automatically excluded
     """)
+
 
 
 
