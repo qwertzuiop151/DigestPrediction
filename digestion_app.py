@@ -18,6 +18,8 @@ st.set_page_config(
 
 st.title("🧬 Restriction Digest Planner")
 st.markdown("Automatically identifies optimal enzyme combinations for diagnostic restriction analysis of circular plasmids.")
+
+st.markdown("""
 <style>
     [data-testid="collapsedControl"] {
         display: none;
@@ -27,6 +29,7 @@ st.markdown("Automatically identifies optimal enzyme combinations for diagnostic
         min-width: 350px !important;
     }
 </style>
+""", unsafe_allow_html=True)
 # ── ENZYMES ────────────────────────────────────────────────────────────────────
 DEFAULT_ENZYMES = [
     "EcoRI", "HindIII", "BamHI", "XbaI", "SalI", "PstI",
@@ -377,5 +380,6 @@ else:
     - Use *Prioritise short fragments* if gel run time is a concern
     - Enzymes not present in the uploaded sequence are automatically excluded
     """)
+
 
 
