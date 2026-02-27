@@ -30,9 +30,20 @@ st.markdown("""
 
 # ── TOOL SELECTION ─────────────────────────────────────────────────────────────
 st.sidebar.markdown("""
-<div style="font-size: 1.1rem; font-weight: 800; color: #a78bfa; 
-     letter-spacing: 0.05em; margin-bottom: 0.3rem;">
-    🔬 SELECT TOOL
+<div style="
+    background: linear-gradient(135deg, #1e1e3f 0%, #2d1b69 100%);
+    border: 1px solid #7c3aed;
+    border-radius: 10px;
+    padding: 1rem 1.1rem 0.6rem 1.1rem;
+    margin-bottom: 0.8rem;
+">
+    <div style="font-size: 0.7rem; font-weight: 700; color: #a78bfa;
+                letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0.5rem;">
+        Select Analysis Module
+    </div>
+    <div style="font-size: 1.25rem; font-weight: 800; color: #ffffff; line-height: 1.3;">
+        🧬 Plasmid Analysis Suite
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -40,12 +51,23 @@ tool = st.sidebar.radio(
     label="",
     options=["Restriction Digest Planner", "Multi-Plasmid Comparator"],
     index=0,
-    format_func=lambda x: f"🧪 {x}" if x == "Restriction Digest Planner" else f"🔀 {x}"
+    format_func=lambda x: (
+        "🧪  Restriction Digest Planner" if x == "Restriction Digest Planner"
+        else "🔀  Multi-Plasmid Comparator"
+    )
 )
 
+st.sidebar.markdown("""<style>
+div[role="radiogroup"] label {
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    padding: 0.35rem 0 !important;
+}
+</style>""", unsafe_allow_html=True)
+
 tool_descriptions = {
-    "Restriction Digest Planner": "Upload a plasmid sequence and automatically find the best enzyme combinations for a diagnostic digest. Ranked by band separation quality and visualised as a predicted agarose gel.",
-    "Multi-Plasmid Comparator": "Upload 2 or more plasmids and identify which enzyme combinations produce distinct, distinguishable band patterns. Ideal for colony screening and construct verification.",
+    "Restriction Digest Planner": "Identifies optimal enzyme combinations for diagnostic restriction analysis of circular plasmids. Results ranked by gel separation quality.",
+    "Multi-Plasmid Comparator": "Compares restriction digest patterns across multiple constructs and identifies enzyme combinations that discriminate between plasmids.",
 }
 
 st.sidebar.caption(tool_descriptions[tool])
