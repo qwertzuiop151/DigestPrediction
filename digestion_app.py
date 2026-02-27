@@ -164,16 +164,16 @@ def draw_gel(results, plasmid_size, title_suffix=""):
     for size in marker_sizes:
         y = bp_to_y(size)
         is_thick = size in thick_bands
-        height = 0.014 if is_thick else 0.010
+        height = 0.008 if is_thick else 0.006
         intensity = 0.2 + 0.75 * (size / max_marker)
         fig.add_shape(type="rect",
-                      x0=-lane_width, x1=lane_width,
-                      y0=y - height, y1=y + height,
-                      fillcolor="white", opacity=intensity, line=dict(width=0))
-        fig.add_shape(type="rect",
-                      x0=-lane_width + 0.05, x1=lane_width - 0.05,
-                      y0=y - 0.003, y1=y + 0.003,
-                      fillcolor="white", opacity=intensity * 0.2, line=dict(width=0))
+                          x0=lane_x - lane_width, x1=lane_x + lane_width,
+                          y0=y - 0.008, y1=y + 0.008,
+                          fillcolor="white", opacity=intensity, line=dict(width=0))
+            fig.add_shape(type="rect",
+                          x0=lane_x - lane_width + 0.05, x1=lane_x + lane_width - 0.05,
+                          y0=y - 0.002, y1=y + 0.002,
+                          fillcolor="white", opacity=intensity * 0.3, line=dict(width=0))
         fig.add_annotation(x=-lane_width - 0.05, y=y,
                            text=f"<b>{size} bp</b>" if is_thick else f"{size} bp",
                            showarrow=False,
@@ -313,6 +313,7 @@ else:
     
     **Tip:** Start with max 2 enzymes per digest for faster results.
     """)
+
 
 
 
