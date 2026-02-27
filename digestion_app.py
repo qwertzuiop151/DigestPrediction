@@ -53,8 +53,10 @@ div[data-testid="stSidebar"] div[data-testid="stButton"] button {
 """, unsafe_allow_html=True)
 
 st.sidebar.markdown(
-    '<div style="font-size:0.65rem;font-weight:700;color:#a78bfa;letter-spacing:0.14em;'
-    'text-transform:uppercase;margin-bottom:0.6rem;">🧬 Plasmid Analysis Toolkit — Select Module</div>',
+    '<div style="font-size:0.95rem;font-weight:800;color:#ffffff;margin-bottom:0.7rem;">'
+    '🧬 Plasmid Analysis Toolkit</div>'
+    '<div style="font-size:0.75rem;color:#a78bfa;font-weight:600;letter-spacing:0.08em;'
+    'text-transform:uppercase;margin-bottom:0.75rem;">Select Analysis Module</div>',
     unsafe_allow_html=True)
 
 _t1 = st.session_state.active_tool == "Restriction Digest Planner"
