@@ -1518,7 +1518,7 @@ elif tool == "Feature Annotation Viewer":
                     x=r_line * np.cos(arc),
                     y=r_line * np.sin(arc),
                     mode="lines",
-                    line=dict(width=4, color=color),
+                    line=dict(width=1.5, color=color),
                     text=hover, hoverinfo="text",
                     showlegend=display_type not in seen_types,
                     name=display_type,
