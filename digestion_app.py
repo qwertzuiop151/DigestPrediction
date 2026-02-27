@@ -1816,16 +1816,46 @@ elif tool == "Feature Annotation Viewer":
             if view_mode == "🔵 Circular":
                 with st.spinner("Rendering map..."):
                     fig_annot, _ = draw_annotation_map(filtered, show_labels=show_labels)
+
+                    # Zoom to selected feature if one is selected
+                    fz = st.session_state.get("feat_zoom")
+                    if fz:
+                        # Calculate angle of feature midpoint and zoom in
+                        mid_pos = (fz["start"] + fz["end"]) / 2
+                        mid_a = np.pi / 2 - 2 * np.pi * (mid_pos - 1) / plasmid_size
+                        # Zoom window: ±30% around feature midpoint in x/y
+                        zoom = 0.55  # smaller = more zoomed in
+                        cx = zoom * 1.0 * np.cos(mid_a)
+                        cy = zoom * 1.0 * np.sin(mid_a)
+                        r = 0.65
+                        fig_annot.update_layout(
+                            xaxis=dict(range=[cx - r, cx + r],
+                                       showticklabels=False, showgrid=False, zeroline=False),
+                            yaxis=dict(range=[cy - r, cy + r], scaleanchor="x",
+                                       showticklabels=False, showgrid=False, zeroline=False),
+                            title=dict(
+                                text=f"Feature Map  |  {plasmid_name}  →  {fz['label']}",
+                                font=dict(color="white", size=13), x=0.5))
+                        st.caption(f"Zoomed to: **{fz['label']}** "
+                                   f"({fz['start']:,}–{fz['end']:,} bp) "
+                                   "— click another row or zoom out manually.")
+
                     st.plotly_chart(fig_annot, use_container_width=True, key="feat_map")
             else:
                 st.markdown(f"**Linear view  —  {plasmid_name}  {plasmid_size:,} bp**")
+
+                # Pre-fill range from table selection
+                _fz = st.session_state.get("feat_zoom")
+                _default_start = max(1, _fz["start"] - 200) if _fz else 1
+                _default_end   = min(plasmid_size, _fz["end"] + 200) if _fz else plasmid_size
+
                 lc1, lc2 = st.columns(2)
                 with lc1:
                     lin_start = st.number_input("From (bp)", min_value=1,
-                        max_value=plasmid_size, value=1, step=50, key="lin_start")
+                        max_value=plasmid_size, value=_default_start, step=50, key="lin_start")
                 with lc2:
                     lin_end = st.number_input("To (bp)", min_value=1,
-                        max_value=plasmid_size, value=plasmid_size, step=50, key="lin_end")
+                        max_value=plasmid_size, value=_default_end, step=50, key="lin_end")
                 if lin_start < lin_end:
                     region_feats_lin = [f for f in filtered.features
                         if f.type != "source"
@@ -1920,9 +1950,32 @@ elif tool == "Feature Annotation Viewer":
                 def color_type(val):
                     c = FEATURE_COLORS.get(val, DEFAULT_COLOR)
                     return f"background-color: {c}22; color: {c}; font-weight: 600"
-                st.dataframe(
+
+                st.caption("Click a row to zoom the map to that feature.")
+                sel = st.dataframe(
                     feat_df.style.applymap(color_type, subset=["Type"]),
-                    use_container_width=True, hide_index=True, height=500)
+                    use_container_width=True, hide_index=True, height=500,
+                    on_select="rerun", selection_mode="single-row",
+                    key="feat_table_sel")
+
+                # Read selected feature
+                selected_feat = None
+                try:
+                    rows = sel.selection.rows if sel and sel.selection else []
+                    if rows:
+                        row = feat_df.iloc[rows[0]]
+                        selected_feat = {"start": int(row["Start"]),
+                                         "end":   int(row["End"]),
+                                         "label": str(row["Label"])}
+                        st.session_state["feat_zoom"] = selected_feat
+                except Exception:
+                    pass
+
+                # Persist zoom across reruns
+                if "feat_zoom" not in st.session_state:
+                    st.session_state["feat_zoom"] = None
+                if selected_feat:
+                    st.session_state["feat_zoom"] = selected_feat
             else:
                 st.caption("No features to display.")
             gb_out = io.StringIO()
