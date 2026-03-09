@@ -109,17 +109,34 @@ if st.sidebar.button(
 tool = st.session_state.active_tool
 st.sidebar.divider()
 
-# ENZYMES
-DEFAULT_ENZYMES = [
+# ENZYMES (Thermo Fisher FastDigest only)
+# Curated from official Thermo FastDigest catalog (176 enzymes total).
+# Only the most commonly used enzymes included (BioPython-compatible names).
+
+FASTDIGEST_6BASE = [
+    # Value Pack 13 (most popular, included in FD starter kit):
     "EcoRI", "HindIII", "BamHI", "XbaI", "SalI", "PstI",
-    "SphI", "KpnI", "SacI", "XhoI", "NcoI", "NheI",
-    "NotI", "XmaI", "SmaI", "ClaI", "EcoRV", "NdeI",
-    "ScaI", "PvuI", "PvuII", "BglII", "ApaI", "MluI",
-    "SpeI", "NsiI", "AluI", "HaeIII", "TaqI", "RsaI",
-    "DraI", "AscI", "PacI", "AgeI", "SacII", "MfeI",
-    "AflII", "BsrGI", "PmeI", "SfiI", "AvrII", "SbfI",
-    "BclI", "BssHII", "BstBI", "BstXI", "NarI", "BspHI",
+    "KpnI", "XhoI", "NotI", "SmaI", "NdeI", "BglII", "EcoRV",
+    # Common cloning/diagnostic 6-cutters:
+    "NcoI", "NheI", "SphI", "SacI", "XmaI", "ClaI",
+    "ScaI", "PvuI", "PvuII", "ApaI", "MluI", "SpeI",
+    "NsiI", "MfeI", "AgeI", "BspHI", "BclI", "BstXI",
+    "SfiI", "SbfI", "StuI", "HpaI", "NruI", "BglI",
+    "ApaLI", "AccI", "Acc65I", "AvaI", "BsaI", "NaeI",
+    "SspI", "StyI", "HincII", "BsmI", "EcoNI", "DraIII",
 ]
+
+FASTDIGEST_8BASE = [
+    "AscI", "NotI", "PacI", "PmeI",
+]
+
+FASTDIGEST_4BASE = [
+    "AluI", "DpnI", "DraI", "HaeIII", "HinfI",
+    "MspI", "HpaII", "RsaI", "TaqI", "MboI", "MseI",
+    "DdeI", "MnlI", "NspI",
+]
+
+DEFAULT_ENZYMES = FASTDIGEST_6BASE + FASTDIGEST_8BASE + FASTDIGEST_4BASE
 
 # DAM/DCM METHYLATION
 # dam methylase blocks: GATC (EcoRV, ClaI, XbaI, MboI, BclI, BamHI overlap)
