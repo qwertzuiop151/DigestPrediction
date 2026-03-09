@@ -118,7 +118,7 @@ FASTDIGEST_6BASE = [
     "EcoRI", "HindIII", "BamHI", "XbaI", "SalI", "PstI",
     "KpnI", "XhoI", "NotI", "SmaI", "NdeI", "BglII", "EcoRV",
     # Common cloning/diagnostic 6-cutters:
-    "NcoI", "NheI", "SphI", "SacI", "XmaI", "ClaI",
+    "NcoI", "NheI", "SphI", "SacI", "ClaI",
     "ScaI", "PvuI", "PvuII", "ApaI", "MluI", "SpeI",
     "NsiI", "MfeI", "AgeI", "BspHI", "BclI", "BstXI",
     "SfiI", "SbfI", "StuI", "HpaI", "NruI", "BglI",
